@@ -1905,6 +1905,385 @@
       });
     }
   </script>
+
+    <style id="responsive-mobile-polish">
+        /* =========================================================
+           Responsive layout polish
+           - Desktop layout remains unchanged.
+           - Mobile reorganizes controls instead of squeezing them.
+           - Uses viewport-safe spacing and fluid sizing.
+           ========================================================= */
+
+        /* Fluid base sizing for touch devices */
+        html {
+            --ui-gutter: clamp(10px, 3.5vw, 16px);
+            --paper-gutter: clamp(16px, 5vw, 48px);
+        }
+
+        button,
+        input,
+        select {
+            touch-action: manipulation;
+        }
+
+        /* Prevent flex children from creating accidental horizontal overflow. */
+        #app-header > div,
+        #search-bar > div,
+        #app-footer > div,
+        #paper-sheet,
+        #editor-body {
+            min-width: 0;
+        }
+
+        /* Phones / narrow tablets */
+        @media (max-width: 640px) {
+            #app-header {
+                flex-direction: column;
+                align-items: stretch;
+                justify-content: flex-start;
+                gap: 4px;
+                padding:
+                    max(6px, env(safe-area-inset-top))
+                    var(--ui-gutter)
+                    7px;
+            }
+
+            /* Row 1: navigation + brand */
+            #app-header > div:first-child {
+                width: 100%;
+                min-height: 36px;
+                display: flex;
+                align-items: center;
+                justify-content: flex-start;
+                gap: 2px;
+            }
+
+            /* Row 2: actions. They get their own natural row rather than
+               being forced into the same line as the logo. */
+            #app-header > div:last-child {
+                width: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                flex-wrap: wrap;
+                gap: 2px;
+                padding-top: 1px;
+            }
+
+            #app-header > div:last-child > button {
+                width: 36px;
+                height: 36px;
+                min-width: 36px;
+                padding: 8px;
+                flex: 0 0 36px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            #app-header > div:last-child > button svg {
+                width: 19px;
+                height: 19px;
+            }
+
+            #brand-home-btn {
+                min-width: 0;
+                max-width: calc(100vw - 88px);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-size: clamp(13px, 4vw, 16px);
+                letter-spacing: .055em;
+                padding-inline: 5px;
+            }
+
+            #toggle-sidebar-btn,
+            #library-btn {
+                width: 36px;
+                height: 36px;
+                padding: 8px;
+                flex: 0 0 36px;
+            }
+
+            #toggle-sidebar-btn svg,
+            #library-btn svg {
+                width: 19px;
+                height: 19px;
+            }
+
+            /* The existing desktop-only focus button stays hidden on mobile.
+               Keep the separator out of the flow as well. */
+            #app-header > div:last-child > span {
+                display: none !important;
+            }
+
+            /* Search bar becomes a proper two-part mobile row. */
+            #search-bar {
+                padding: 7px var(--ui-gutter);
+                gap: 6px;
+                align-items: center;
+            }
+
+            #search-bar > div:first-child {
+                min-width: 0;
+                gap: 5px;
+            }
+
+            #doc-search-input {
+                min-width: 0;
+                width: 100%;
+                font-size: 14px;
+                padding: 7px 8px;
+            }
+
+            #search-match-count {
+                min-width: 3.5rem;
+                font-size: 10px;
+            }
+
+            #search-bar > div:last-child {
+                flex: 0 0 auto;
+                gap: 1px;
+            }
+
+            #search-prev-btn,
+            #search-next-btn,
+            #search-close-btn {
+                width: 34px;
+                height: 34px;
+                padding: 7px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            /* Workspace gets fluid edge spacing. */
+            #editor-scroll {
+                padding: 12px var(--ui-gutter) 16px;
+            }
+
+            #paper-sheet {
+                width: 100%;
+                max-width: none;
+                padding: var(--paper-gutter);
+                border-radius: 3px;
+            }
+
+            #doc-title {
+                font-size: clamp(19px, 5.5vw, 24px);
+                line-height: 1.35;
+            }
+
+            #doc-content,
+            #highlight-layer {
+                font-size: clamp(16px, 4.5vw, 18px);
+            }
+
+            #editor-body {
+                min-height: 10rem;
+            }
+
+            /* Formatting toolbar scales slightly while keeping comfortable
+               touch targets. */
+            #color-toolbar {
+                gap: 7px;
+                margin-bottom: 10px;
+                flex-wrap: wrap;
+            }
+
+            #color-toolbar #bold-btn,
+            #color-toolbar #ink-red-btn,
+            #color-toolbar #ink-orange-btn {
+                width: 34px;
+                height: 34px;
+                min-width: 34px;
+            }
+
+            #color-toolbar #ink-clear-btn {
+                min-height: 34px;
+                padding-inline: 9px;
+            }
+
+            /* Footer: stats and actions remain grouped instead of colliding. */
+            #app-footer {
+                padding: 7px var(--ui-gutter) max(7px, env(safe-area-inset-bottom));
+                gap: 6px 10px;
+                align-items: center;
+            }
+
+            #app-footer > div:first-child {
+                flex: 1 1 auto;
+                gap: clamp(10px, 4vw, 16px);
+                min-width: 0;
+            }
+
+            #app-footer > div:first-child > div {
+                white-space: nowrap;
+            }
+
+            #app-footer > div:last-child {
+                flex: 0 0 auto;
+                gap: 4px;
+            }
+
+            #app-footer .editor-action-icon {
+                width: 34px;
+                height: 34px;
+            }
+
+            #app-footer .editor-action-icon svg {
+                width: 17px;
+                height: 17px;
+            }
+
+            #status-toast {
+                max-width: 72px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            /* Sidebar becomes a viewport-relative drawer. */
+            #sidebar {
+                width: min(320px, 88vw);
+                max-width: 88vw;
+            }
+
+            /* Full-screen panels use consistent safe gutters. */
+            #brand-panel,
+            #library-panel {
+                padding:
+                    max(10px, env(safe-area-inset-top))
+                    var(--ui-gutter)
+                    max(10px, env(safe-area-inset-bottom));
+            }
+
+            #brand-panel > div {
+                width: 100%;
+                max-width: 720px;
+                max-height: calc(100dvh - 20px);
+            }
+
+            #library-panel > div {
+                width: 100%;
+                max-width: 720px;
+                margin: 10px 0;
+                max-height: calc(100dvh - 20px);
+            }
+
+            #brand-panel .grid,
+            #library-panel .grid {
+                min-width: 0;
+            }
+
+            /* Keep library's date-range controls usable on narrow phones. */
+            #lib-range-date-wrap {
+                grid-template-columns: 1fr;
+            }
+
+            /* Avoid tiny text/buttons becoming visually stranded. */
+            #brand-panel button,
+            #library-panel button {
+                min-height: 34px;
+            }
+        }
+
+        /* Very narrow phones (320–380px class). */
+        @media (max-width: 380px) {
+            #app-header > div:last-child > button,
+            #toggle-sidebar-btn,
+            #library-btn {
+                width: 34px;
+                height: 34px;
+                min-width: 34px;
+                flex-basis: 34px;
+                padding: 7px;
+            }
+
+            #app-header > div:last-child > button svg,
+            #toggle-sidebar-btn svg,
+            #library-btn svg {
+                width: 18px;
+                height: 18px;
+            }
+
+            #brand-home-btn {
+                font-size: 12px;
+                letter-spacing: .04em;
+                max-width: calc(100vw - 82px);
+            }
+
+            #app-footer {
+                font-size: 10px;
+            }
+
+            #app-footer > div:first-child {
+                gap: 9px;
+            }
+
+            #app-footer .editor-action-icon {
+                width: 32px;
+                height: 32px;
+            }
+
+            #paper-sheet {
+                padding: 15px;
+            }
+
+            #doc-title {
+                font-size: 19px;
+            }
+
+            #color-toolbar {
+                gap: 6px;
+            }
+        }
+
+        /* Landscape phones: use the horizontal space efficiently without
+           restoring the cramped desktop header. */
+        @media (max-width: 640px) and (orientation: landscape) {
+            #app-header {
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+            }
+
+            #app-header > div:first-child,
+            #app-header > div:last-child {
+                width: auto;
+            }
+
+            #app-header > div:last-child {
+                justify-content: flex-end;
+            }
+
+            #paper-sheet {
+                padding: 18px clamp(18px, 5vw, 36px);
+            }
+        }
+
+        /* Desktop/tablet: let the existing design breathe, while making
+           header controls resilient at intermediate widths. */
+        @media (min-width: 641px) and (max-width: 900px) {
+            #app-header {
+                padding-inline: clamp(12px, 2vw, 20px);
+            }
+
+            #app-header > div:last-child {
+                gap: 1px;
+            }
+
+            #brand-home-btn {
+                font-size: clamp(14px, 2vw, 18px);
+            }
+
+            #paper-sheet {
+                padding-inline: clamp(24px, 5vw, 48px);
+            }
+        }
+    </style>
+
 </head>
 <body class="h-screen flex flex-col font-serif overflow-hidden select-none">
 
