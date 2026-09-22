@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <title>Type-Touch タイプライターエディタ</title>
+    <title>タイプライターエディタ - Typetouch</title>
 
     <style id="tailwind-local">
 /*! tailwindcss v4.1.10 | MIT License | https://tailwindcss.com */
@@ -1403,6 +1403,32 @@
             font-family: "Courier Prime", "Courier New", Courier, monospace;
         }
 
+        #typewriter-manual-backup-btn.backup-disabled,
+        #typewriter-manual-backup-btn.backup-disabled:hover,
+        #typewriter-manual-backup-btn.backup-disabled:active,
+        #typewriter-manual-backup-btn.backup-disabled:focus,
+        #typewriter-manual-backup-btn.backup-disabled:focus-visible,
+        #export-all-btn.backup-disabled,
+        #export-all-btn.backup-disabled:hover,
+        #export-all-btn.backup-disabled:active,
+        #export-all-btn.backup-disabled:focus,
+        #export-all-btn.backup-disabled:focus-visible,
+        #brand-action-export.backup-disabled,
+        #brand-action-export.backup-disabled:hover,
+        #brand-action-export.backup-disabled:active,
+        #brand-action-export.backup-disabled:focus,
+        #brand-action-export.backup-disabled:focus-visible {
+            background: #9a9a9a !important;
+            color: #eeeeee !important;
+            border-color: #9a9a9a !important;
+            box-shadow: none !important;
+            transform: none !important;
+            opacity: 1 !important;
+            cursor: not-allowed !important;
+            pointer-events: none !important;
+            filter: none !important;
+        }
+
         /* Custom Typewriter styling */
         body {
             background-color: #f7f4ea;
@@ -1781,6 +1807,32 @@
             pointer-events: none !important;
             opacity: 0.5;
         }
+        /* ヘッダー同期アイコン */
+        #header-sync-btn { position: relative; }
+        #header-sync-dot {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 8px;
+            height: 8px;
+            border-radius: 9999px;
+            border: 1.5px solid #f7f4ea;
+            background-color: #a8a29e; /* 未設定: stone */
+            transition: background-color 0.2s ease;
+        }
+        body.dark #header-sync-dot { border-color: #2b2438; }
+        #header-sync-dot.sync-dot-ok { background-color: #059669; }      /* 同期済み: emerald */
+        #header-sync-dot.sync-dot-warn { background-color: #d97706; }    /* 要確認/要同期: amber */
+        #header-sync-dot.sync-dot-off { background-color: #a8a29e; }     /* 未設定/非対応: stone */
+        #header-sync-icon.sync-icon-spin {
+            animation: header-sync-spin 0.9s linear infinite;
+            color: #2563eb;
+        }
+        body.dark #header-sync-icon.sync-icon-spin { color: #a78bfa; }
+        @keyframes header-sync-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
         /* 閲覧モードでは文字色ツールを非表示 */
         body.view-mode-active #color-toolbar {
             display: none !important;
@@ -1905,385 +1957,6 @@
       });
     }
   </script>
-
-    <style id="responsive-mobile-polish">
-        /* =========================================================
-           Responsive layout polish
-           - Desktop layout remains unchanged.
-           - Mobile reorganizes controls instead of squeezing them.
-           - Uses viewport-safe spacing and fluid sizing.
-           ========================================================= */
-
-        /* Fluid base sizing for touch devices */
-        html {
-            --ui-gutter: clamp(10px, 3.5vw, 16px);
-            --paper-gutter: clamp(16px, 5vw, 48px);
-        }
-
-        button,
-        input,
-        select {
-            touch-action: manipulation;
-        }
-
-        /* Prevent flex children from creating accidental horizontal overflow. */
-        #app-header > div,
-        #search-bar > div,
-        #app-footer > div,
-        #paper-sheet,
-        #editor-body {
-            min-width: 0;
-        }
-
-        /* Phones / narrow tablets */
-        @media (max-width: 640px) {
-            #app-header {
-                flex-direction: column;
-                align-items: stretch;
-                justify-content: flex-start;
-                gap: 4px;
-                padding:
-                    max(6px, env(safe-area-inset-top))
-                    var(--ui-gutter)
-                    7px;
-            }
-
-            /* Row 1: navigation + brand */
-            #app-header > div:first-child {
-                width: 100%;
-                min-height: 36px;
-                display: flex;
-                align-items: center;
-                justify-content: flex-start;
-                gap: 2px;
-            }
-
-            /* Row 2: actions. They get their own natural row rather than
-               being forced into the same line as the logo. */
-            #app-header > div:last-child {
-                width: 100%;
-                display: flex;
-                align-items: center;
-                justify-content: flex-end;
-                flex-wrap: wrap;
-                gap: 2px;
-                padding-top: 1px;
-            }
-
-            #app-header > div:last-child > button {
-                width: 36px;
-                height: 36px;
-                min-width: 36px;
-                padding: 8px;
-                flex: 0 0 36px;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-            }
-
-            #app-header > div:last-child > button svg {
-                width: 19px;
-                height: 19px;
-            }
-
-            #brand-home-btn {
-                min-width: 0;
-                max-width: calc(100vw - 88px);
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-                font-size: clamp(13px, 4vw, 16px);
-                letter-spacing: .055em;
-                padding-inline: 5px;
-            }
-
-            #toggle-sidebar-btn,
-            #library-btn {
-                width: 36px;
-                height: 36px;
-                padding: 8px;
-                flex: 0 0 36px;
-            }
-
-            #toggle-sidebar-btn svg,
-            #library-btn svg {
-                width: 19px;
-                height: 19px;
-            }
-
-            /* The existing desktop-only focus button stays hidden on mobile.
-               Keep the separator out of the flow as well. */
-            #app-header > div:last-child > span {
-                display: none !important;
-            }
-
-            /* Search bar becomes a proper two-part mobile row. */
-            #search-bar {
-                padding: 7px var(--ui-gutter);
-                gap: 6px;
-                align-items: center;
-            }
-
-            #search-bar > div:first-child {
-                min-width: 0;
-                gap: 5px;
-            }
-
-            #doc-search-input {
-                min-width: 0;
-                width: 100%;
-                font-size: 14px;
-                padding: 7px 8px;
-            }
-
-            #search-match-count {
-                min-width: 3.5rem;
-                font-size: 10px;
-            }
-
-            #search-bar > div:last-child {
-                flex: 0 0 auto;
-                gap: 1px;
-            }
-
-            #search-prev-btn,
-            #search-next-btn,
-            #search-close-btn {
-                width: 34px;
-                height: 34px;
-                padding: 7px;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-            }
-
-            /* Workspace gets fluid edge spacing. */
-            #editor-scroll {
-                padding: 12px var(--ui-gutter) 16px;
-            }
-
-            #paper-sheet {
-                width: 100%;
-                max-width: none;
-                padding: var(--paper-gutter);
-                border-radius: 3px;
-            }
-
-            #doc-title {
-                font-size: clamp(19px, 5.5vw, 24px);
-                line-height: 1.35;
-            }
-
-            #doc-content,
-            #highlight-layer {
-                font-size: clamp(16px, 4.5vw, 18px);
-            }
-
-            #editor-body {
-                min-height: 10rem;
-            }
-
-            /* Formatting toolbar scales slightly while keeping comfortable
-               touch targets. */
-            #color-toolbar {
-                gap: 7px;
-                margin-bottom: 10px;
-                flex-wrap: wrap;
-            }
-
-            #color-toolbar #bold-btn,
-            #color-toolbar #ink-red-btn,
-            #color-toolbar #ink-orange-btn {
-                width: 34px;
-                height: 34px;
-                min-width: 34px;
-            }
-
-            #color-toolbar #ink-clear-btn {
-                min-height: 34px;
-                padding-inline: 9px;
-            }
-
-            /* Footer: stats and actions remain grouped instead of colliding. */
-            #app-footer {
-                padding: 7px var(--ui-gutter) max(7px, env(safe-area-inset-bottom));
-                gap: 6px 10px;
-                align-items: center;
-            }
-
-            #app-footer > div:first-child {
-                flex: 1 1 auto;
-                gap: clamp(10px, 4vw, 16px);
-                min-width: 0;
-            }
-
-            #app-footer > div:first-child > div {
-                white-space: nowrap;
-            }
-
-            #app-footer > div:last-child {
-                flex: 0 0 auto;
-                gap: 4px;
-            }
-
-            #app-footer .editor-action-icon {
-                width: 34px;
-                height: 34px;
-            }
-
-            #app-footer .editor-action-icon svg {
-                width: 17px;
-                height: 17px;
-            }
-
-            #status-toast {
-                max-width: 72px;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-
-            /* Sidebar becomes a viewport-relative drawer. */
-            #sidebar {
-                width: min(320px, 88vw);
-                max-width: 88vw;
-            }
-
-            /* Full-screen panels use consistent safe gutters. */
-            #brand-panel,
-            #library-panel {
-                padding:
-                    max(10px, env(safe-area-inset-top))
-                    var(--ui-gutter)
-                    max(10px, env(safe-area-inset-bottom));
-            }
-
-            #brand-panel > div {
-                width: 100%;
-                max-width: 720px;
-                max-height: calc(100dvh - 20px);
-            }
-
-            #library-panel > div {
-                width: 100%;
-                max-width: 720px;
-                margin: 10px 0;
-                max-height: calc(100dvh - 20px);
-            }
-
-            #brand-panel .grid,
-            #library-panel .grid {
-                min-width: 0;
-            }
-
-            /* Keep library's date-range controls usable on narrow phones. */
-            #lib-range-date-wrap {
-                grid-template-columns: 1fr;
-            }
-
-            /* Avoid tiny text/buttons becoming visually stranded. */
-            #brand-panel button,
-            #library-panel button {
-                min-height: 34px;
-            }
-        }
-
-        /* Very narrow phones (320–380px class). */
-        @media (max-width: 380px) {
-            #app-header > div:last-child > button,
-            #toggle-sidebar-btn,
-            #library-btn {
-                width: 34px;
-                height: 34px;
-                min-width: 34px;
-                flex-basis: 34px;
-                padding: 7px;
-            }
-
-            #app-header > div:last-child > button svg,
-            #toggle-sidebar-btn svg,
-            #library-btn svg {
-                width: 18px;
-                height: 18px;
-            }
-
-            #brand-home-btn {
-                font-size: 12px;
-                letter-spacing: .04em;
-                max-width: calc(100vw - 82px);
-            }
-
-            #app-footer {
-                font-size: 10px;
-            }
-
-            #app-footer > div:first-child {
-                gap: 9px;
-            }
-
-            #app-footer .editor-action-icon {
-                width: 32px;
-                height: 32px;
-            }
-
-            #paper-sheet {
-                padding: 15px;
-            }
-
-            #doc-title {
-                font-size: 19px;
-            }
-
-            #color-toolbar {
-                gap: 6px;
-            }
-        }
-
-        /* Landscape phones: use the horizontal space efficiently without
-           restoring the cramped desktop header. */
-        @media (max-width: 640px) and (orientation: landscape) {
-            #app-header {
-                flex-direction: row;
-                align-items: center;
-                justify-content: space-between;
-                gap: 8px;
-            }
-
-            #app-header > div:first-child,
-            #app-header > div:last-child {
-                width: auto;
-            }
-
-            #app-header > div:last-child {
-                justify-content: flex-end;
-            }
-
-            #paper-sheet {
-                padding: 18px clamp(18px, 5vw, 36px);
-            }
-        }
-
-        /* Desktop/tablet: let the existing design breathe, while making
-           header controls resilient at intermediate widths. */
-        @media (min-width: 641px) and (max-width: 900px) {
-            #app-header {
-                padding-inline: clamp(12px, 2vw, 20px);
-            }
-
-            #app-header > div:last-child {
-                gap: 1px;
-            }
-
-            #brand-home-btn {
-                font-size: clamp(14px, 2vw, 18px);
-            }
-
-            #paper-sheet {
-                padding-inline: clamp(24px, 5vw, 48px);
-            }
-        }
-    </style>
-
 </head>
 <body class="h-screen flex flex-col font-serif overflow-hidden select-none">
 
@@ -2328,6 +2001,14 @@
                 <svg id="view-mode-icon-edit" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                 </svg>
+            </button>
+
+            <!-- 同期：状態をドットで表示し、利用可能なら即同期、未設定ならメニューを開く -->
+            <button id="header-sync-btn" type="button" class="p-2 text-stone-600 hover:text-stone-900 hover:bg-paper-200 rounded-lg transition-colors" title="同期状態を確認">
+                <svg id="header-sync-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                <span id="header-sync-dot" class="sync-dot-off"></span>
             </button>
 
             <span class="hidden sm:inline-block w-px h-5 bg-paper-200 mx-1" aria-hidden="true"></span>
@@ -2601,11 +2282,41 @@
                             <div>集中モード <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl Z</kbd></div>
                             <div>文書内検索 / キャンセル <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl F</kbd></div>
                             <div>サウンド切替 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl M</kbd></div>
+                            <div>自動同期 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl O</kbd></div>
                             <div>閲覧 / 編集切替 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl X</kbd></div>
                             <div>通常 / ダーク切替 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl + Space</kbd></div>
                             <div>候補移動 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">↑↓</kbd></div>
                             <div>改行 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Enter</kbd></div>
                             <div>空白 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Space</kbd></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Data Management / Automatic Backup -->
+                <section id="typewriter-data-section">
+                    <h3 class="text-xs font-bold font-mono text-stone-700 tracking-wide mb-2">データ管理</h3>
+                    <div id="typewriter-backup-warning" class="hidden mb-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[10px] text-amber-800">
+                        <div class="font-bold">バックアップのお願い</div>
+                        <div class="mt-0.5">14日以上バックアップされていません。大切な文書をJSONとして保存してください。</div>
+                    </div>
+                    <div class="space-y-2">
+                        <div id="typewriter-auto-sync-row" class="hidden rounded-xl border border-paper-200 bg-paper-50 p-3">
+                            <div class="flex items-center justify-between gap-3">
+                                <div class="min-w-0"><div class="text-[11px] font-bold">今すぐ同期</div><div id="typewriter-auto-sync-status" class="text-[9px] text-stone-400 mt-0.5 truncate">自動同期先を確認中…</div></div>
+                                <button id="typewriter-sync-btn" type="button" class="shrink-0 px-3 py-1.5 rounded-lg bg-stone-800 text-white text-[10px] font-bold hover:bg-stone-900 transition-colors disabled:bg-stone-400 disabled:cursor-not-allowed">今すぐ同期</button>
+                            </div>
+                        </div>
+                        <div id="typewriter-auto-setup-row" class="rounded-xl border border-paper-200 bg-paper-50 p-3">
+                            <div class="flex items-center justify-between gap-3">
+                                <div class="min-w-0"><div id="typewriter-auto-setup-title" class="text-[11px] font-bold">自動同期</div><div id="typewriter-auto-setup-status" class="text-[9px] text-stone-400 mt-0.5">保存先を設定するとJSONへ自動同期します。</div></div>
+                                <button id="typewriter-auto-setup-btn" type="button" class="shrink-0 px-3 py-1.5 rounded-lg border border-stone-300 text-stone-700 text-[10px] font-bold hover:bg-paper-200 transition-colors">保存先を設定</button>
+                            </div>
+                        </div>
+                        <div id="typewriter-manual-backup-row" class="rounded-xl border border-paper-200 bg-paper-50 p-3">
+                            <div class="flex items-center justify-between gap-3">
+                                <div class="min-w-0"><div class="text-[11px] font-bold">データをバックアップ</div><div class="text-[9px] text-stone-400 mt-0.5">新しいJSONバックアップを保存します。</div></div>
+                                <button id="typewriter-manual-backup-btn" type="button" class="shrink-0 px-3 py-1.5 rounded-lg border border-stone-300 text-stone-700 text-[10px] font-bold hover:bg-paper-200 transition-colors">バックアップ</button>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -2699,8 +2410,9 @@
         // 1. IndexedDB Controller
         // ==========================================
         const DB_NAME = 'TypewriterAppDB';
-        const DB_VERSION = 1;
+        const DB_VERSION = 2;
         const STORE_NAME = 'documents';
+        const BACKUP_STORE_NAME = 'backupConfig';
 
         class DocumentDB {
             constructor() {
@@ -2727,6 +2439,9 @@
                             const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
                             store.createIndex('updatedAt', 'updatedAt', { unique: false });
                             store.createIndex('title', 'title', { unique: false });
+                        }
+                        if (!db.objectStoreNames.contains(BACKUP_STORE_NAME)) {
+                            db.createObjectStore(BACKUP_STORE_NAME, { keyPath: 'id' });
                         }
                     };
                 });
@@ -2776,6 +2491,26 @@
                         }
                     };
                     request.onerror = (e) => reject(e.target.error);
+                });
+            }
+
+            async getBackupConfig() {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) return reject('DB未初期化');
+                    const tx = this.db.transaction([BACKUP_STORE_NAME], 'readonly');
+                    const req = tx.objectStore(BACKUP_STORE_NAME).get('default');
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = (e) => reject(e.target.error);
+                });
+            }
+
+            async saveBackupConfig(config) {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) return reject('DB未初期化');
+                    const tx = this.db.transaction([BACKUP_STORE_NAME], 'readwrite');
+                    const req = tx.objectStore(BACKUP_STORE_NAME).put({ id: 'default', ...config });
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = (e) => reject(e.target.error);
                 });
             }
 
@@ -3157,6 +2892,8 @@
                 this.searchRefreshFrame = 0;
                 this.searchMutationObserver = null;
                 this.searchResizeObserver = null;
+                this.autoBackupSyncInProgress = false;
+                this.backupConfig = { backupFileHandle: null, backupFileName: 'typetouch-backup.json', lastBackup: null };
 
                 // Elements
                 this.titleInput = document.getElementById('doc-title');
@@ -3188,8 +2925,15 @@
                     }
 
                     await this.db.init();
+                    try {
+                        const savedBackupConfig = await this.db.getBackupConfig();
+                        if (savedBackupConfig) this.backupConfig = { ...this.backupConfig, ...savedBackupConfig };
+                    } catch (e) {
+                        console.warn('Backup config restore failed:', e);
+                    }
                     this.bindEvents();
                     await this.loadDocumentList();
+                    await this.updateAutomaticBackupUI();
 
                     const savedViewMode = localStorage.getItem('typewriter-view-mode') === 'true';
                     this.setViewMode(savedViewMode, { silent: true });
@@ -3516,6 +3260,7 @@
                 document.getElementById('brand-home-btn').addEventListener('click', () => {
                     this.audio.playToolbarClick();
                     this.refreshBrandDashboard();
+                    this.updateAutomaticBackupUI();
                     brandPanel.classList.remove('hidden');
                     brandPanel.classList.add('flex');
                 });
@@ -3541,8 +3286,31 @@
                 document.getElementById('brand-action-focus').addEventListener('click', () => { this.audio.playToolbarClick(); closeBrandPanel(); this.toggleFocusMode(true); });
                 document.getElementById('brand-action-copy').addEventListener('click', () => { this.audio.playToolbarClick(); document.getElementById('copy-btn')?.click(); });
                 document.getElementById('brand-action-share').addEventListener('click', () => { this.audio.playToolbarClick(); document.getElementById('share-btn')?.click(); });
-                document.getElementById('brand-action-export').addEventListener('click', () => { closeBrandPanel(); document.getElementById('export-all-btn')?.click(); });
+                document.getElementById('brand-action-export').addEventListener('click', () => { closeBrandPanel(); this.exportAllData(); });
                 document.getElementById('brand-action-import').addEventListener('click', () => { closeBrandPanel(); document.getElementById('import-all-btn')?.click(); });
+
+                // ヘッダー同期アイコン：
+                // ・未設定なら、そのままフォルダ選択（保存先指定）を開く
+                // ・既に指定済みなら、メニューを開かずその場で同期を実行する
+                document.getElementById('header-sync-btn').addEventListener('click', async () => {
+                    if (this.autoBackupSyncInProgress) return;
+                    this.audio.playToolbarClick();
+
+                    if (!this.supportsAutomaticBackup()) {
+                        this.showToast('このブラウザでは自動同期を利用できません');
+                        return;
+                    }
+
+                    const usable = await this.isAutomaticBackupUsable();
+                    if (usable) {
+                        // 既に保存先が指定済み → その場で同期を更新
+                        await this.syncAutoBackupFile(true, false);
+                    } else {
+                        // 未設定、またはアクセス権が失われている
+                        // → ファイル/フォルダ選択（または権限再確認）を直接開く
+                        await this.setupAutomaticBackup();
+                    }
+                });
 
                 // Dark Mode Toggle
                 document.getElementById('dark-mode-btn').addEventListener('click', () => {
@@ -3729,6 +3497,10 @@
                     e.target.value = ''; // 同じファイル再選択可能に
                 });
 
+                document.getElementById('typewriter-auto-setup-btn')?.addEventListener('click', () => this.setupAutomaticBackup());
+                document.getElementById('typewriter-sync-btn')?.addEventListener('click', () => this.syncAutoBackupFile(false, false));
+                document.getElementById('typewriter-manual-backup-btn')?.addEventListener('click', () => this.exportAllData());
+
                 // Copy to clipboard
                 document.getElementById('copy-btn').addEventListener('click', () => {
                     this.audio.playToolbarClick();
@@ -3750,6 +3522,15 @@
 
                     const key = e.key.toLowerCase();
                     const code = e.code;
+
+                    // Ctrl+O: 自動同期
+                    // ブラウザ標準の「ファイルを開く」を抑止し、アプリの自動同期ボタンと同じ処理を実行。
+                    if (key === 'o') {
+                        e.preventDefault(); e.stopImmediatePropagation();
+                        this.audio.playToolbarClick();
+                        document.getElementById('header-sync-btn')?.click();
+                        return;
+                    }
 
                     // 閲覧/編集モード切替：閲覧中でも唯一有効
                     if (key === 'x') {
@@ -4676,6 +4457,7 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                         this.showToast('IndexedDBに保存しました');
                     }
                     await this.loadDocumentList();
+                    if (await this.isAutomaticBackupUsable()) this.syncAutoBackupFile(false, true);
                 } catch (err) {
                     console.error('Save failed:', err);
                     this.showToast('保存に失敗しました');
@@ -4860,7 +4642,378 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
             }
 
             /** IndexedDB 内の全文書を JSON ファイルとして書き出し */
+            // File System Access API のファイル選択はトップレベルの
+            // ブラウジングコンテキストからのみ実行できる。
+            // ChatGPT等のクロスオリジンiframe/埋め込みプレビューでは
+            // showDirectoryPicker() を呼ばないようにして SecurityError を防ぐ。
+            isTopLevelBrowsingContext() {
+                try {
+                    return window.top === window.self;
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            supportsAutomaticBackup() {
+                return this.isTopLevelBrowsingContext()
+                    && typeof window.showDirectoryPicker === 'function';
+            }
+
+            hasAutomaticBackupConfigured() {
+                return this.supportsAutomaticBackup() && !!this.backupConfig.backupFileHandle && typeof this.backupConfig.backupFileHandle.createWritable === 'function';
+            }
+
+            async isAutomaticBackupUsable() {
+                if (!this.hasAutomaticBackupConfigured()) return false;
+                try {
+                    const handle = this.backupConfig.backupFileHandle;
+                    if (typeof handle.queryPermission !== 'function') return false;
+                    if ((await handle.queryPermission({ mode: 'readwrite' })) !== 'granted') return false;
+                    // 保存先ファイルが削除・移動されていないか確認する。
+                    if (typeof handle.getFile === 'function') await handle.getFile();
+                    return true;
+                } catch (e) {
+                    // NotFoundError など、保存先が存在しなくなった場合は未設定扱いにする。
+                    return false;
+                }
+            }
+
+            async buildBackupPayload() {
+                const docs = await this.db.getAllDocs();
+                return {
+                    app: 'TypewriterApp',
+                    version: 1,
+                    exportedAt: new Date().toISOString(),
+                    documentCount: docs.length,
+                    documents: docs
+                };
+            }
+
+            async setupAutomaticBackup() {
+                if (!this.isTopLevelBrowsingContext()) {
+                    this.showToast('自動同期の保存先選択は、アプリを単独のタブで開いてください');
+                    await this.updateAutomaticBackupUI();
+                    return false;
+                }
+
+                if (!this.supportsAutomaticBackup()) {
+                    this.showToast('このブラウザでは自動同期を利用できません');
+                    return false;
+                }
+
+                try {
+                    let existingHandle = this.backupConfig.backupFileHandle;
+
+                    // まず登録済みファイルが「実在するか」を確認する。
+                    // 権限確認より先に getFile() を行うことで、削除・移動された
+                    // ファイルを確実に検出する。
+                    if (existingHandle && typeof existingHandle.getFile === 'function') {
+                        try {
+                            await existingHandle.getFile();
+                        } catch (e) {
+                            if (e && (e.name === 'NotFoundError' || e.name === 'InvalidStateError')) {
+                                existingHandle = null;
+                                this.backupConfig.backupFileHandle = null;
+                                this.backupConfig.backupFileName = 'typetouch-backup.json';
+                                this.backupConfig.lastBackup = null;
+                                await this.db.saveBackupConfig(this.backupConfig);
+                            } else {
+                                throw e;
+                            }
+                        }
+                    }
+
+                    // 既存ファイルが存在する場合は、そのファイルをそのまま使用する。
+                    if (existingHandle) {
+                        let permission = 'granted';
+                        if (typeof existingHandle.queryPermission === 'function') {
+                            permission = await existingHandle.queryPermission({ mode: 'readwrite' });
+                        }
+
+                        if (permission !== 'granted') {
+                            if (typeof existingHandle.requestPermission !== 'function') {
+                                await this.updateAutomaticBackupUI();
+                                return false;
+                            }
+                            permission = await existingHandle.requestPermission({ mode: 'readwrite' });
+                            if (permission !== 'granted') {
+                                await this.updateAutomaticBackupUI();
+                                return false;
+                            }
+                            await this.db.saveBackupConfig(this.backupConfig);
+                        }
+
+                        const success = await this.syncAutoBackupFile(true, false);
+                        return success;
+                    }
+
+                    // 保存先がない場合は「ファイルそのもの」を選択する。
+                    // showSaveFilePicker() は新規作成・既存JSONの指定の両方に対応する。
+                    // showDirectoryPicker() はここでは使用しない。
+                    if (typeof window.showSaveFilePicker !== 'function') {
+                        this.showToast('このブラウザではJSONファイルの保存先選択を利用できません');
+                        await this.updateAutomaticBackupUI();
+                        return false;
+                    }
+
+                    const fileHandle = await window.showSaveFilePicker({
+                        suggestedName: 'typetouch-backup.json',
+                        types: [{
+                            description: 'JSONバックアップファイル',
+                            accept: { 'application/json': ['.json'] }
+                        }],
+                        excludeAcceptAllOption: true
+                    });
+
+                    if (!fileHandle || typeof fileHandle.createWritable !== 'function') {
+                        await this.updateAutomaticBackupUI();
+                        return false;
+                    }
+
+                    let permission = 'granted';
+                    if (typeof fileHandle.queryPermission === 'function') {
+                        permission = await fileHandle.queryPermission({ mode: 'readwrite' });
+                    }
+                    if (permission !== 'granted' && typeof fileHandle.requestPermission === 'function') {
+                        permission = await fileHandle.requestPermission({ mode: 'readwrite' });
+                    }
+                    if (permission !== 'granted') {
+                        await this.updateAutomaticBackupUI();
+                        return false;
+                    }
+
+                    this.backupConfig.backupFileHandle = fileHandle;
+                    this.backupConfig.backupFileName = fileHandle.name || 'typetouch-backup.json';
+                    this.backupConfig.lastBackup = null;
+                    await this.db.saveBackupConfig(this.backupConfig);
+
+                    const success = await this.syncAutoBackupFile(true, false);
+                    if (!success) {
+                        this.backupConfig.backupFileHandle = null;
+                        this.backupConfig.backupFileName = 'typetouch-backup.json';
+                        this.backupConfig.lastBackup = null;
+                        await this.db.saveBackupConfig(this.backupConfig);
+                    }
+                    return success;
+                } catch (err) {
+                    if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) {
+                        await this.updateAutomaticBackupUI();
+                        return false;
+                    }
+                    console.error('Automatic backup setup failed:', err);
+                    this.showToast('自動同期の設定に失敗しました');
+                    await this.updateAutomaticBackupUI();
+                    return false;
+                }
+            }
+
+            async syncAutoBackupFile(force = false, silentFailure = false) {
+                if (!this.hasAutomaticBackupConfigured()) {
+                    if (force && !silentFailure) {
+                        return await this.setupAutomaticBackup();
+                    }
+                    return false;
+                }
+                if (this.autoBackupSyncInProgress) return false;
+
+                this.autoBackupSyncInProgress = true;
+                await this.updateAutomaticBackupUI();
+
+                try {
+                    const handle = this.backupConfig.backupFileHandle;
+
+                    // 登録先が削除・移動されていないかを確認する。
+                    // 消えていた場合は、明示的な自動同期操作なら
+                    // 新しいJSON保存先をその場で選び直す。
+                    try {
+                        if (typeof handle.getFile === 'function') {
+                            await handle.getFile();
+                        }
+                    } catch (err) {
+                        if (err && (err.name === 'NotFoundError' || err.name === 'InvalidStateError')) {
+                            this.backupConfig.backupFileHandle = null;
+                            this.backupConfig.backupFileName = 'typetouch-backup.json';
+                            this.backupConfig.lastBackup = null;
+                            await this.db.saveBackupConfig(this.backupConfig);
+
+                            if (force && !silentFailure) {
+                                this.autoBackupSyncInProgress = false;
+                                await this.updateAutomaticBackupUI();
+                                return await this.setupAutomaticBackup();
+                            }
+
+                            await this.updateAutomaticBackupUI();
+                            return false;
+                        }
+                        throw err;
+                    }
+
+                    let permission = 'granted';
+                    if (typeof handle.queryPermission === 'function') {
+                        permission = await handle.queryPermission({ mode: 'readwrite' });
+                    }
+
+                    // バックグラウンド同期では権限ダイアログを出さない。
+                    // 明示的な操作時だけ force=true で requestPermission() を実行する。
+                    if (permission !== 'granted') {
+                        if (!force) {
+                            await this.updateAutomaticBackupUI();
+                            return false;
+                        }
+
+                        if (typeof handle.requestPermission !== 'function') {
+                            await this.updateAutomaticBackupUI();
+                            return false;
+                        }
+
+                        permission = await handle.requestPermission({ mode: 'readwrite' });
+                        if (permission !== 'granted') {
+                            await this.updateAutomaticBackupUI();
+                            return false;
+                        }
+                    }
+
+                    const payload = await this.buildBackupPayload();
+                    const writable = await handle.createWritable();
+
+                    try {
+                        await writable.write(JSON.stringify(payload, null, 2));
+                        await writable.close();
+                    } catch (writeErr) {
+                        try { await writable.abort?.(); } catch (_) {}
+                        throw writeErr;
+                    }
+
+                    this.backupConfig.lastBackup = Date.now();
+                    await this.db.saveBackupConfig(this.backupConfig);
+                    if (!silentFailure) this.showToast('自動同期しました');
+                    return true;
+                } catch (err) {
+                    console.error('Automatic backup sync failed:', err);
+                    if (!silentFailure) {
+                        this.showToast('自動同期に失敗しました。保存先のアクセス権を確認してください。');
+                    }
+                    return false;
+                } finally {
+                    this.autoBackupSyncInProgress = false;
+                    await this.updateAutomaticBackupUI();
+                }
+            }
+
+            async updateAutomaticBackupUI() {
+                const syncRow = document.getElementById('typewriter-auto-sync-row');
+                const setupRow = document.getElementById('typewriter-auto-setup-row');
+                const setupTitle = document.getElementById('typewriter-auto-setup-title');
+                const setupStatus = document.getElementById('typewriter-auto-setup-status');
+                const setupBtn = document.getElementById('typewriter-auto-setup-btn');
+                const syncBtn = document.getElementById('typewriter-sync-btn');
+                const syncStatus = document.getElementById('typewriter-auto-sync-status');
+                const manualBtn = document.getElementById('typewriter-manual-backup-btn');
+                const sidebarBtn = document.getElementById('export-all-btn');
+                const brandBtn = document.getElementById('brand-action-export');
+                const warning = document.getElementById('typewriter-backup-warning');
+
+                if (!manualBtn) return;
+
+                const supported = this.supportsAutomaticBackup();
+                const configured = this.hasAutomaticBackupConfigured();
+                const usable = await this.isAutomaticBackupUsable();
+
+                // 「今すぐ同期」は実際に保存先へアクセスできるときだけ表示。
+                if (syncRow) syncRow.style.display = usable ? 'block' : 'none';
+
+                // 非対応ブラウザでは自動同期の設定UI自体を表示しない。
+                if (setupRow) setupRow.style.display = supported ? 'block' : 'none';
+
+                if (setupTitle && setupStatus && setupBtn) {
+                    if (configured && !usable) {
+                        setupTitle.textContent = '自動同期のアクセス確認';
+                        setupStatus.textContent = '保存先へのアクセス許可が必要です。';
+                        setupBtn.textContent = 'アクセスを許可';
+                    } else if (configured && usable) {
+                        setupTitle.textContent = '自動同期';
+                        setupStatus.textContent = `保存先：${this.backupConfig.backupFileName || 'typetouch-backup.json'}`;
+                        setupBtn.textContent = '保存先を変更';
+                    } else {
+                        setupTitle.textContent = '自動同期';
+                        setupStatus.textContent = '保存先を設定するとJSONへ自動同期します。';
+                        setupBtn.textContent = '保存先を設定';
+                    }
+                }
+
+                const locked = this.autoBackupSyncInProgress || usable;
+                const buttons = [manualBtn, sidebarBtn, brandBtn].filter(Boolean);
+
+                buttons.forEach(btn => {
+                    btn.disabled = locked;
+                    btn.setAttribute('aria-disabled', locked ? 'true' : 'false');
+                    btn.classList.toggle('backup-disabled', locked);
+                    btn.title = locked
+                        ? '自動同期が利用可能または同期中のため、手動バックアップは現在利用できません。'
+                        : '現在のデータを新しいJSONバックアップとして保存します。';
+                });
+
+                if (syncBtn) {
+                    syncBtn.disabled = !usable || this.autoBackupSyncInProgress;
+                    syncBtn.textContent = this.autoBackupSyncInProgress ? '同期中…' : '今すぐ同期';
+                }
+
+                if (syncStatus) {
+                    syncStatus.textContent = this.autoBackupSyncInProgress
+                        ? 'JSONバックアップを更新しています…'
+                        : `保存先：${this.backupConfig.backupFileName || 'typetouch-backup.json'}`;
+                }
+
+                const last = this.backupConfig.lastBackup ? new Date(this.backupConfig.lastBackup) : null;
+                const due = !last || (Date.now() - last.getTime()) >= 14 * 24 * 60 * 60 * 1000;
+                if (warning) warning.classList.toggle('hidden', usable || !due);
+
+                this.updateHeaderSyncIndicator({ supported, configured, usable, last, due });
+            }
+
+            // ヘッダーの同期アイコン（現在の同期状態をひと目で分かるようにする）
+            updateHeaderSyncIndicator({ supported, configured, usable, last, due }) {
+                const btn = document.getElementById('header-sync-btn');
+                const icon = document.getElementById('header-sync-icon');
+                const dot = document.getElementById('header-sync-dot');
+                if (!btn || !icon || !dot) return;
+
+                const fmtLast = () => last
+                    ? `最終同期：${last.toLocaleDateString('ja-JP')} ${last.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`
+                    : '同期履歴なし';
+
+                icon.classList.toggle('sync-icon-spin', !!this.autoBackupSyncInProgress);
+                dot.classList.remove('sync-dot-ok', 'sync-dot-warn', 'sync-dot-off');
+
+                if (this.autoBackupSyncInProgress) {
+                    dot.classList.add('sync-dot-off');
+                    btn.title = '同期中…';
+                } else if (!supported) {
+                    dot.classList.add('sync-dot-off');
+                    btn.title = 'このブラウザでは自動同期を利用できません（タップで手動バックアップ）';
+                } else if (!configured) {
+                    dot.classList.add('sync-dot-off');
+                    btn.title = '自動同期は未設定です（タップで設定）';
+                } else if (configured && !usable) {
+                    dot.classList.add('sync-dot-warn');
+                    btn.title = '自動同期にアクセス許可が必要です（タップで許可）';
+                } else if (usable && due) {
+                    dot.classList.add('sync-dot-warn');
+                    btn.title = `同期先：${this.backupConfig.backupFileName || 'typetouch-backup.json'} ／ ${fmtLast()}（タップで今すぐ同期）`;
+                } else {
+                    dot.classList.add('sync-dot-ok');
+                    btn.title = `同期済み：${this.backupConfig.backupFileName || 'typetouch-backup.json'} ／ ${fmtLast()}（タップで今すぐ同期）`;
+                }
+            }
+
             async exportAllData() {
+                // 自動同期が利用可能な間は、すべての手動バックアップ入口を無効化する。
+                if (this.autoBackupSyncInProgress || await this.isAutomaticBackupUsable()) {
+                    this.showToast('自動同期が利用可能または同期中のため、手動バックアップは現在利用できません');
+                    await this.updateAutomaticBackupUI();
+                    return;
+                }
+
                 try {
                     const docs = await this.db.getAllDocs();
                     const payload = {
@@ -4870,21 +5023,29 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                         documentCount: docs.length,
                         documents: docs
                     };
+
                     const json = JSON.stringify(payload, null, 2);
                     const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+
                     a.href = url;
                     a.download = `typewriter-backup-${stamp}.json`;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
+
+                    this.backupConfig.lastBackup = Date.now();
+                    await this.db.saveBackupConfig(this.backupConfig);
+
                     this.showToast(`${docs.length}件の全データを書き出しました`);
+                    await this.updateAutomaticBackupUI();
                 } catch (err) {
                     console.error('Export all failed:', err);
                     this.showToast('全データの書き出しに失敗しました');
+                    await this.updateAutomaticBackupUI();
                 }
             }
 
