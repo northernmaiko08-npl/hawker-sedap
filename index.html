@@ -7,7 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <title>タイプライターエディタ - Typetouch</title>
+    <title>Type-Touch - Type Writer Editor</title>
 
     <style id="tailwind-local">
 /*! tailwindcss v4.1.10 | MIT License | https://tailwindcss.com */
@@ -1499,6 +1499,51 @@
             transition: all 0.3s ease-in-out;
         }
 
+        /* 集中モード：枠を消すだけでなく、用紙と文字を画面いっぱいに拡大 */
+        body.focus-mode #app-header,
+        body.focus-mode #app-footer {
+            display: none !important;
+        }
+        body.focus-mode main {
+            flex: 1 1 100%;
+            min-height: 0;
+            width: 100%;
+            background: #fdfbf7;
+        }
+        body.dark.focus-mode main {
+            background: #0c0a12;
+        }
+        body.focus-mode #editor-scroll {
+            padding: 0 !important;
+            align-items: stretch;
+            width: 100%;
+            height: 100%;
+        }
+        body.focus-mode #paper-sheet {
+            width: 100% !important;
+            max-width: none !important;
+            min-height: 100% !important;
+            margin: 0 !important;
+            padding: clamp(1.25rem, 5vw, 4.5rem) clamp(1.25rem, 8vw, 8rem) !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+        }
+        body.focus-mode #doc-title {
+            font-size: clamp(1.5rem, 3vw, 2.75rem) !important;
+            line-height: 1.35;
+        }
+        body.focus-mode #doc-content,
+        body.focus-mode #highlight-layer {
+            font-size: clamp(1.25rem, 2.1vw, 2rem) !important;
+            line-height: 1.9 !important;
+        }
+        body.focus-mode #exit-focus-btn {
+            position: fixed;
+            top: 0.75rem;
+            right: 0.75rem;
+        }
+
         /* Search highlight markers: 本文と同じ文字位置に重ねるため、枠だけを描画 */
         .search-highlight {
             background-color: rgba(250, 204, 21, 0.62);
@@ -1783,30 +1828,18 @@
         body.dark #color-toolbar button.active-ink {
             outline-color: #c084fc;
         }
-        /* 閲覧モード中: ハンバーガー・ライブラリ（ホーム）・閲覧/編集切替以外は操作不可 */
-        body.view-mode-active #app-header button:not(#toggle-sidebar-btn):not(#library-btn):not(#view-mode-btn) {
+        /* 閲覧モードでは通常の操作ボタンを維持し、新規作成・削除だけを無効化 */
+        body.view-mode-active #new-doc-btn,
+        body.view-mode-active #delete-doc-btn,
+        body.view-mode-active #brand-home-new-btn,
+        body.view-mode-active [data-viewmode-block="document-create"],
+        body.view-mode-active [data-viewmode-block="document-delete"] {
             pointer-events: none !important;
-            opacity: 1;
-            color: #a8a29e !important;
-            border-color: #d6d3d1 !important;
-            background-color: transparent !important;
+            opacity: .38 !important;
+            cursor: not-allowed !important;
+            filter: grayscale(1);
         }
-        body.view-mode-active #app-header button:not(#toggle-sidebar-btn):not(#library-btn):not(#view-mode-btn) svg {
-            color: #a8a29e !important;
-            stroke: #a8a29e !important;
-        }
-        body.dark.view-mode-active #app-header button:not(#toggle-sidebar-btn):not(#library-btn):not(#view-mode-btn) {
-            color: #6b6578 !important;
-            border-color: #4a4458 !important;
-        }
-        body.dark.view-mode-active #app-header button:not(#toggle-sidebar-btn):not(#library-btn):not(#view-mode-btn) svg {
-            color: #6b6578 !important;
-            stroke: #6b6578 !important;
-        }
-        body.view-mode-active #search-bar {
-            pointer-events: none !important;
-            opacity: 0.5;
-        }
+        /* 検索・ライブラリ・表示設定などは閲覧モードでも操作可能 */
         /* ヘッダー同期アイコン */
         #header-sync-btn { position: relative; }
         #header-sync-dot {
@@ -1833,9 +1866,11 @@
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
-        /* 閲覧モードでは文字色ツールを非表示 */
-        body.view-mode-active #color-toolbar {
-            display: none !important;
+        /* 閲覧モードでは色・太字の変更だけ無効化（ツールバーは表示） */
+        body.view-mode-active #color-toolbar button {
+            pointer-events: none !important;
+            opacity: .35 !important;
+            cursor: not-allowed !important;
         }
         body.view-mode-active #app-footer button {
             pointer-events: auto !important;
@@ -1890,7 +1925,11 @@
 
 /* Import dialogs: always above the library panel, including offline builds where arbitrary z-index utilities may be unavailable. */
 #import-mode-dialog, #import-replace-confirm { position:fixed !important; z-index:10000 !important; inset:0 !important; }
-#import-mode-dialog > div, #import-replace-confirm > div { width:min(100%,360px) !important; max-width:360px !important; }
+#import-mode-dialog > div { width:min(100%,540px) !important; max-width:540px !important; }
+#import-replace-confirm > div { width:min(100%,440px) !important; max-width:440px !important; }
+#import-mode-dialog [data-import-mode="add"], #import-mode-dialog [data-import-mode="replace"] { min-height:112px; padding:22px 24px !important; border-radius:16px !important; }
+#import-mode-dialog [data-import-mode="cancel"] { min-height:48px; }
+@media (max-width: 480px) { #import-mode-dialog > div { width:100% !important; max-width:100% !important; } #import-mode-dialog [data-import-mode="add"], #import-mode-dialog [data-import-mode="replace"] { min-height:100px; padding:18px !important; } }
 #share-menu .share-panel{width:min(100%,680px);max-height:min(88vh,760px);overflow:auto;background:rgba(255,253,248,.97);border:1px solid rgba(30,41,59,.10);border-radius:24px;box-shadow:0 24px 70px rgba(15,23,42,.18);padding:22px}
 .dark #share-menu .share-panel{background:rgba(30,30,28,.97);border-color:rgba(255,255,255,.10);box-shadow:0 24px 70px rgba(0,0,0,.42)}
 #share-menu .share-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
@@ -2295,10 +2334,6 @@
                 <!-- Data Management / Automatic Backup -->
                 <section id="typewriter-data-section">
                     <h3 class="text-xs font-bold font-mono text-stone-700 tracking-wide mb-2">データ管理</h3>
-                    <div id="typewriter-backup-warning" class="hidden mb-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[10px] text-amber-800">
-                        <div class="font-bold">バックアップのお願い</div>
-                        <div class="mt-0.5">14日以上バックアップされていません。大切な文書をJSONとして保存してください。</div>
-                    </div>
                     <div class="space-y-2">
                         <div id="typewriter-auto-sync-row" class="hidden rounded-xl border border-paper-200 bg-paper-50 p-3">
                             <div class="flex items-center justify-between gap-3">
@@ -3017,7 +3052,13 @@
                     this.refreshBrandDashboard();
                     this.triggerAutoSave();
                     this.syncEditorHeight();
-                    this.updateSearchHighlights();
+                    // 入力のたびに検索位置そのものを再計算し、挿入・削除・カーソル移動後も
+                    // 現在のヒットを追従させる。描画だけ更新すると古いoffsetが残ってズレる。
+                    if (this.docSearchInput && this.docSearchInput.value) {
+                        this.performSearch({ jump: false, preserveCurrent: true });
+                    } else {
+                        this.updateSearchHighlights();
+                    }
                     this.scheduleSearchHighlightRefresh();
                 });
 
@@ -3216,12 +3257,14 @@
 
                 // New Document button
                 document.getElementById('new-doc-btn').addEventListener('click', () => {
+                    if (this.isViewMode) return;
                     this.audio.playReturnBell();
                     this.createNewDocument();
                 });
 
                 // Delete current document
                 document.getElementById('delete-doc-btn').addEventListener('click', () => {
+                    if (this.isViewMode) return;
                     this.deleteCurrentDocument();
                 });
 
@@ -3275,6 +3318,7 @@
                     }
                 });
                 document.getElementById('brand-home-new-btn').addEventListener('click', () => {
+                    if (this.isViewMode) return;
                     this.audio.playReturnBell();
                     closeBrandPanel();
                     document.getElementById('new-doc-btn').click();
@@ -3319,6 +3363,7 @@
 
                 // View Mode Toggle（ヘッダーの閲覧/編集ボタンのみ）
                 document.getElementById('view-mode-btn').addEventListener('click', () => {
+                    this.audio.playReturnBell();
                     this.setViewMode(!this.isViewMode);
                 });
 
@@ -3672,8 +3717,7 @@
                 const viewBtn = document.getElementById('view-mode-btn');
 
                 if (enable) {
-                    // 閲覧モードでは本文検索UIも閉じ、Ctrl/Cmd+Fから起動できないようにする。
-                    if (this.isSearchOpen) this.toggleSearchBar(false);
+                    // 閲覧モードでも検索や各種表示操作は使える。本文編集と装飾だけを禁止。
                     ta.setAttribute('contenteditable', 'false');
                     title.setAttribute('readonly', 'readonly');
                     ta.classList.add('cursor-default');
@@ -4054,25 +4098,57 @@
                 const scrollEl = document.getElementById('editor-scroll');
                 const scrollToMatch = () => {
                     if (!scrollEl) return;
-                    const mark = this.highlightLayer &&
-                        this.highlightLayer.querySelector(`[data-search-index="${this.currentMatchIndex}"]`);
-                    if (!mark) return;
 
-                    const markRect = mark.getBoundingClientRect();
-                    const scrollRect = scrollEl.getBoundingClientRect();
-                    const margin = Math.max(56, Math.min(120, scrollRect.height * 0.16));
-
-                    if (markRect.top < scrollRect.top + margin) {
-                        scrollEl.scrollTop -= (scrollRect.top + margin) - markRect.top;
-                    } else if (markRect.bottom > scrollRect.bottom - margin) {
-                        scrollEl.scrollTop += markRect.bottom - (scrollRect.bottom - margin);
+                    // オーバーレイのマーカーは再描画中に一時的に古い位置になることがあるため、
+                    // まず本文で実際に選択されている範囲の矩形を使ってスクロール位置を決める。
+                    let targetRect = null;
+                    const selection = window.getSelection && window.getSelection();
+                    if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+                        const range = selection.getRangeAt(0);
+                        const rects = Array.from(range.getClientRects()).filter(r => r.width || r.height);
+                        if (rects.length) {
+                            const first = rects[0];
+                            const last = rects[rects.length - 1];
+                            targetRect = {
+                                top: first.top,
+                                bottom: last.bottom,
+                                left: Math.min(...rects.map(r => r.left)),
+                                right: Math.max(...rects.map(r => r.right)),
+                                width: Math.max(...rects.map(r => r.width)),
+                                height: last.bottom - first.top
+                            };
+                        }
                     }
+
+                    // 選択範囲が取れない場合だけ、検索ハイライトのマーカーを補助として使う。
+                    if (!targetRect) {
+                        const mark = this.highlightLayer &&
+                            this.highlightLayer.querySelector(`[data-search-index="${this.currentMatchIndex}"]`);
+                        if (mark) targetRect = mark.getBoundingClientRect();
+                    }
+                    if (!targetRect) return;
+
+                    const scrollRect = scrollEl.getBoundingClientRect();
+                    const margin = Math.max(48, Math.min(96, scrollRect.height * 0.12));
+                    let delta = 0;
+                    if (targetRect.top < scrollRect.top + margin) {
+                        delta = targetRect.top - (scrollRect.top + margin);
+                    } else if (targetRect.bottom > scrollRect.bottom - margin) {
+                        delta = targetRect.bottom - (scrollRect.bottom - margin);
+                    }
+
+                    // 候補が表示領域の外に出たら、その候補のあるページ位置まで追従させる。
+                    // 小さな補正を積み重ねるのではなく、実際の選択範囲から毎回計算する。
+                    if (Math.abs(delta) > 1) scrollEl.scrollTop += delta;
                 };
 
-                // レイアウト確定後に2回補正。長文でのreflowや選択描画にも耐える。
+                // 選択・折り返し・ハイライト描画が落ち着いた後にも位置を再確認する。
                 requestAnimationFrame(() => {
                     scrollToMatch();
-                    requestAnimationFrame(scrollToMatch);
+                    requestAnimationFrame(() => {
+                        scrollToMatch();
+                        requestAnimationFrame(scrollToMatch);
+                    });
                 });
 
                 this.searchMatchCountEl.textContent =
@@ -4335,12 +4411,28 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 const segments = map.segments;
                 const pointFor = (pos, preferEnd = false) => {
                     const p = Math.max(0, Math.min(Number(pos) || 0, text.length));
-                    for (const seg of segments) {
-                        if (p >= seg.start && p <= seg.end) {
-                            return { node: seg.node, offset: Math.max(0, Math.min(seg.node.length, p - seg.start)) };
+                    if (!segments.length) return { node: this.contentInput, offset: 0 };
+                    // 境界位置は開始点なら次のテキストノード、終了点なら直前のノードを優先。
+                    // 「<= end」で常に前のノードを拾うと、改行や装飾タグをまたいだ検索で
+                    // 選択範囲がずれるため、開始・終了で境界の扱いを分ける。
+                    if (preferEnd) {
+                        for (let i = segments.length - 1; i >= 0; i--) {
+                            const seg = segments[i];
+                            if (p > seg.start && p <= seg.end) {
+                                return { node: seg.node, offset: Math.max(0, Math.min(seg.node.length, p - seg.start)) };
+                            }
+                            if (p === seg.start) {
+                                return { node: seg.node, offset: 0 };
+                            }
+                        }
+                    } else {
+                        for (const seg of segments) {
+                            if (p >= seg.start && p < seg.end) {
+                                return { node: seg.node, offset: Math.max(0, Math.min(seg.node.length, p - seg.start)) };
+                            }
+                            if (p === seg.start) return { node: seg.node, offset: 0 };
                         }
                     }
-                    if (!segments.length) return { node: this.contentInput, offset: 0 };
                     const seg = preferEnd ? segments[segments.length - 1] : segments[0];
                     return { node: seg.node, offset: preferEnd ? seg.node.length : 0 };
                 };
@@ -4465,6 +4557,7 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
             }
 
             createNewDocument() {
+                if (this.isViewMode) return;
                 this.currentDocId = 'doc_' + Date.now();
                 this.createdAt = new Date().toISOString();
                 this.titleInput.value = '';
@@ -4590,11 +4683,13 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 const searchBar = this.searchBar;
 
                 if (enable) {
+                    document.body.classList.add('focus-mode');
                     header.classList.add('-translate-y-full', 'opacity-0');
                     footer.classList.add('translate-y-full', 'opacity-0');
                     if (this.isSearchOpen) searchBar.classList.add('opacity-0', 'pointer-events-none');
                     exitBtn.classList.remove('hidden');
                 } else {
+                    document.body.classList.remove('focus-mode');
                     header.classList.remove('-translate-y-full', 'opacity-0');
                     footer.classList.remove('translate-y-full', 'opacity-0');
                     searchBar.classList.remove('opacity-0', 'pointer-events-none');
@@ -4911,7 +5006,6 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 const manualBtn = document.getElementById('typewriter-manual-backup-btn');
                 const sidebarBtn = document.getElementById('export-all-btn');
                 const brandBtn = document.getElementById('brand-action-export');
-                const warning = document.getElementById('typewriter-backup-warning');
 
                 if (!manualBtn) return;
 
@@ -4965,9 +5059,8 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 }
 
                 const last = this.backupConfig.lastBackup ? new Date(this.backupConfig.lastBackup) : null;
-                const due = !last || (Date.now() - last.getTime()) >= 14 * 24 * 60 * 60 * 1000;
-                if (warning) warning.classList.toggle('hidden', usable || !due);
-
+                // 14日経過を理由とするバックアップ告知・警告表示は行わない。
+                const due = false;
                 this.updateHeaderSyncIndicator({ supported, configured, usable, last, due });
             }
 
@@ -5060,32 +5153,52 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     modal.className = 'fixed inset-0 flex items-center justify-center bg-black/45 backdrop-blur-sm p-4';
                     modal.style.zIndex = '10000';
                     modal.innerHTML = `
-                        <div class="relative w-full max-w-sm sm:max-w-md bg-paper-100 dark:bg-[#211c2b] border border-paper-200 dark:border-purple-900/40 rounded-2xl shadow-2xl overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="import-mode-title">
-                            <button type="button" data-import-mode="cancel" class="absolute top-3 right-3 w-8 h-8 rounded-full border border-stone-200 dark:border-purple-900/30 text-stone-500 dark:text-purple-200/60 hover:bg-paper-200 dark:hover:bg-[#332c43] hover:text-stone-800 dark:hover:text-white transition-colors flex items-center justify-center text-lg leading-none" aria-label="閉じる" title="閉じる">×</button>
-                            <div class="px-5 py-4 pr-14 border-b border-paper-200 dark:border-purple-900/30">
-                                <div class="flex items-center gap-2 mb-1"><span class="w-7 h-7 rounded-lg bg-stone-800 dark:bg-purple-700 text-white flex items-center justify-center text-sm">↥</span><span class="text-[10px] uppercase tracking-[0.16em] text-stone-400 dark:text-purple-200/50">Backup</span></div>
-                                <div id="import-mode-title" class="font-mono font-bold text-sm text-stone-800 dark:text-purple-100">バックアップを読み込む</div>
-                                <div class="text-[11px] text-stone-500 dark:text-purple-200/60 mt-1">${count}件の文書を読み込みます。方法を選択してください。</div>
+                        <div class="import-choice-panel" role="dialog" aria-modal="true" aria-labelledby="import-mode-title" style="width:min(100%,560px);background:var(--color-paper-100,#f7f4ea);color:#292524;border:1px solid rgba(120,113,108,.16);border-radius:24px;box-shadow:0 24px 70px rgba(0,0,0,.22);overflow:hidden;">
+                            <div style="padding:26px 30px 20px;">
+                                <div id="import-mode-title" style="font-size:22px;line-height:1.4;font-weight:750;letter-spacing:-.025em;color:#292524;">バックアップを読み込む</div>
+                                <div style="font-size:14px;line-height:1.75;color:#78716c;margin-top:7px;">バックアップ内の${count}件の文書を、どの方法で読み込みますか？</div>
                             </div>
-                            <div class="p-4 space-y-3">
-                                <button type="button" data-import-mode="add" class="w-full text-left px-4 py-3.5 rounded-xl border border-paper-200 dark:border-purple-900/30 bg-paper-50 dark:bg-[#2a2438] hover:bg-paper-200 dark:hover:bg-[#332c43] hover:-translate-y-0.5 transition-all duration-150">
-                                    <div class="flex items-center gap-3">
-                                        <span class="w-9 h-9 rounded-lg bg-stone-800 text-white flex items-center justify-center text-lg leading-none">＋</span>
-                                        <span class="min-w-0"><span class="block text-sm font-bold text-stone-800 dark:text-purple-100">追加</span><span class="block text-[10px] text-stone-500 dark:text-purple-200/60 mt-0.5">現在の文書を残して、バックアップを追加します</span></span>
-                                    </div>
+                            <div style="display:grid;gap:12px;padding:0 22px 22px;">
+                                <button type="button" data-import-mode="add" class="import-choice-card" style="display:flex;align-items:center;gap:17px;width:100%;min-height:112px;padding:20px 22px;text-align:left;border:1px solid #e7dfcd;border-radius:18px;background:#fdfbf7;color:#292524;cursor:pointer;transition:background .15s,border-color .15s,transform .15s;">
+                                    <span aria-hidden="true" style="display:flex;align-items:center;justify-content:center;flex:0 0 46px;width:46px;height:46px;border-radius:14px;background:#292524;color:#fff;font-size:27px;font-weight:400;line-height:1;">＋</span>
+                                    <span style="display:block;min-width:0;flex:1;"><span style="display:block;font-size:17px;line-height:1.45;font-weight:700;letter-spacing:.01em;">追加する</span><span style="display:block;margin-top:5px;font-size:13px;line-height:1.7;color:#78716c;">今ある文書を残したまま、バックアップの文書を追加します。</span></span>
                                 </button>
-                                <button type="button" data-import-mode="replace" class="w-full text-left px-4 py-3.5 rounded-xl border border-paper-200 dark:border-purple-900/30 bg-paper-50 dark:bg-[#2a2438] hover:bg-paper-200 dark:hover:bg-[#332c43] hover:-translate-y-0.5 transition-all duration-150">
-                                    <div class="flex items-center gap-3">
-                                        <span class="w-9 h-9 rounded-lg border border-stone-300 dark:border-purple-700 text-stone-700 dark:text-purple-100 flex items-center justify-center text-lg leading-none">↻</span>
-                                        <span class="min-w-0"><span class="block text-sm font-bold text-stone-800 dark:text-purple-100">置き換え</span><span class="block text-[10px] text-stone-500 dark:text-purple-200/60 mt-0.5">現在の保存済み文書を削除して復元します</span></span>
-                                    </div>
+                                <button type="button" data-import-mode="replace" class="import-choice-card" style="display:flex;align-items:center;gap:17px;width:100%;min-height:112px;padding:20px 22px;text-align:left;border:1px solid #e7dfcd;border-radius:18px;background:#fdfbf7;color:#292524;cursor:pointer;transition:background .15s,border-color .15s,transform .15s;">
+                                    <span aria-hidden="true" style="display:flex;align-items:center;justify-content:center;flex:0 0 46px;width:46px;height:46px;border-radius:14px;border:1px solid #d6d3d1;background:#f7f4ea;color:#57534e;font-size:25px;font-weight:400;line-height:1;">↻</span>
+                                    <span style="display:block;min-width:0;flex:1;"><span style="display:block;font-size:17px;line-height:1.45;font-weight:700;letter-spacing:.01em;">置き換える</span><span style="display:block;margin-top:5px;font-size:13px;line-height:1.7;color:#78716c;">今ある保存済み文書を削除し、バックアップの内容に置き換えます。</span></span>
                                 </button>
+                                <button type="button" data-import-mode="cancel" class="import-cancel-button" style="width:100%;min-height:48px;margin-top:2px;padding:12px 18px;border:1px solid #d6d3d1;border-radius:14px;background:transparent;color:#57534e;font-size:14px;font-weight:650;letter-spacing:.02em;cursor:pointer;transition:background .15s,border-color .15s;">キャンセル</button>
                             </div>
-
                         </div>`;
+                    const style = document.createElement('style');
+                    style.textContent = `
+                        #import-mode-dialog { padding:20px !important; }
+                        #import-mode-dialog .import-choice-card:hover { background:#f4efe3 !important; border-color:#c9bfa9 !important; }
+                        #import-mode-dialog .import-choice-card:focus-visible,
+                        #import-mode-dialog .import-cancel-button:focus-visible { outline:3px solid rgba(120,113,108,.35); outline-offset:3px; }
+                        #import-mode-dialog .import-choice-card:active { transform:scale(.995); }
+                        #import-mode-dialog .import-cancel-button:hover { background:rgba(120,113,108,.08) !important; border-color:#a8a29e !important; }
+                        .dark #import-mode-dialog .import-choice-panel { background:#211c2b !important; border-color:rgba(168,139,210,.22) !important; }
+                        .dark #import-mode-dialog #import-mode-title { color:#f5f0ff !important; }
+                        .dark #import-mode-dialog .import-choice-card { background:#2a2438 !important; border-color:rgba(168,139,210,.25) !important; color:#f5f0ff !important; }
+                        .dark #import-mode-dialog .import-choice-card:hover { background:#332c43 !important; border-color:#8b70b2 !important; }
+                        .dark #import-mode-dialog .import-choice-card span[aria-hidden="true"] { background:#7251a1 !important; border-color:#8b70b2 !important; color:#fff !important; }
+                        .dark #import-mode-dialog .import-choice-card span span:first-child { color:#f5f0ff !important; }
+                        .dark #import-mode-dialog .import-choice-card span span:last-child { color:rgba(233,221,255,.7) !important; }
+                        .dark #import-mode-dialog .import-cancel-button { border-color:rgba(168,139,210,.35) !important; color:#e9ddff !important; }
+                        .dark #import-mode-dialog .import-cancel-button:hover { background:#332c43 !important; }
+                        @media (max-width:480px) {
+                            #import-mode-dialog .import-choice-panel > div:first-child { padding:22px 22px 16px !important; }
+                            #import-mode-dialog .import-choice-panel > div:last-child { padding:0 14px 16px !important; gap:10px !important; }
+                            #import-mode-dialog .import-choice-card { min-height:104px !important; padding:16px !important; gap:13px !important; }
+                            #import-mode-dialog .import-choice-card span[aria-hidden="true"] { flex-basis:40px !important; width:40px !important; height:40px !important; border-radius:12px !important; }
+                        }
+                    `;
+                    document.head.appendChild(style);
 
                     const finish = mode => {
                         modal.remove();
+                        style.remove();
                         resolve(mode);
                     };
                     modal.querySelectorAll('[data-import-mode]').forEach(btn => {
@@ -5164,8 +5277,7 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     }
 
                     if (mode === 'replace') {
-                        const ok = await this.showImportReplaceConfirm(docs.length);
-                        if (!ok) return;
+                        // 置き換え確認モーダルを挟まず、選択後すぐに既存文書を置き換える
                         await this.db.clearAll();
                     } else {
                         // 追加モードでは既存文書を残し、ID重複を避けて追加する
@@ -5482,11 +5594,22 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 start = clamp(start); end = clamp(end);
                 if (end < start) [start, end] = [end, start];
                 const pointFor = (p, preferEnd=false) => {
-                    for (const seg of map.segments) {
-                        if (p >= seg.start && p <= seg.end) return {node:seg.node, offset:Math.max(0,Math.min(seg.node.length,p-seg.start))};
+                    const segments = map.segments;
+                    if (!segments.length) return {node:el,offset:0};
+                    // 開始位置は境界の次の文字、終了位置は境界の直前の文字に対応させる。
+                    if (preferEnd) {
+                        for (let i = segments.length - 1; i >= 0; i--) {
+                            const seg = segments[i];
+                            if (p > seg.start && p <= seg.end) return {node:seg.node,offset:Math.max(0,Math.min(seg.node.length,p-seg.start))};
+                            if (p === seg.start) return {node:seg.node,offset:0};
+                        }
+                    } else {
+                        for (const seg of segments) {
+                            if (p >= seg.start && p < seg.end) return {node:seg.node,offset:Math.max(0,Math.min(seg.node.length,p-seg.start))};
+                            if (p === seg.start) return {node:seg.node,offset:0};
+                        }
                     }
-                    if (!map.segments.length) return {node:el,offset:0};
-                    const seg=preferEnd?map.segments[map.segments.length-1]:map.segments[0];
+                    const seg=preferEnd?segments[segments.length-1]:segments[0];
                     return {node:seg.node,offset:preferEnd?seg.node.length:0};
                 };
                 const a=pointFor(start,false), b=pointFor(end,true);
@@ -5545,6 +5668,7 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
             }
 
             async deleteCurrentDocument() {
+                if (this.isViewMode) return;
                 if (this.isViewMode) return;
                 const title = (this.titleInput.value || '').trim() || '無題の文書';
                 if (!confirm(`「${title}」を削除しますか？\nこの操作は取り消せません。`)) {
