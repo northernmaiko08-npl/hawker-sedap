@@ -1866,11 +1866,9 @@
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
-        /* 閲覧モードでは色・太字の変更だけ無効化（ツールバーは表示） */
-        body.view-mode-active #color-toolbar button {
-            pointer-events: none !important;
-            opacity: .35 !important;
-            cursor: not-allowed !important;
+        /* 閲覧モードでは文字色・太字変更ボタン自体を表示しない */
+        body.view-mode-active #color-toolbar {
+            display: none !important;
         }
         body.view-mode-active #app-footer button {
             pointer-events: auto !important;
@@ -3420,7 +3418,7 @@
 
                 // 上部ツールバーの全ボタンに「ポクっ」。
                 // 新規＝改行音、ハンバーガー＝開閉音、サウンド＝ON/OFF専用なので除外。
-                const toolbarSoundExclude = new Set(['toggle-sidebar-btn', 'new-doc-btn', 'sound-toggle-btn']);
+                const toolbarSoundExclude = new Set(['toggle-sidebar-btn', 'new-doc-btn', 'sound-toggle-btn', 'view-mode-btn']);
                 document.querySelectorAll('#app-header button').forEach((button) => {
                     if (toolbarSoundExclude.has(button.id)) return;
                     button.addEventListener('click', () => this.audio.playToolbarClick());
@@ -3712,15 +3710,15 @@
                     // 閲覧/編集モード切替：閲覧中でも唯一有効
                     if (key === 'x') {
                         e.preventDefault(); e.stopImmediatePropagation();
-                        this.audio.playToolbarClick();
+                        this.audio.playReturnBell();
                         this.setViewMode(!this.isViewMode);
                         return;
                     }
 
                     // Ctrl+矢印：赤 / オレンジ / 太字 / 全リセット
+                    // 閲覧モード中もショートカット自体は使用可能。
                     if (code === 'ArrowLeft' || code === 'ArrowRight' || code === 'ArrowUp' || code === 'ArrowDown') {
                         e.preventDefault(); e.stopImmediatePropagation();
-                        if (this.isViewMode) return;
                         this.audio.playPenClick();
                         if (code === 'ArrowLeft') this.setActiveInk('red');
                         else if (code === 'ArrowRight') this.setActiveInk('orange');
@@ -3740,16 +3738,15 @@
                         return;
                     }
 
-                    // 閲覧モード中は編集系ショートカットを無効化
-                    if (this.isViewMode) {
-                        if ([ 'enter','backspace','z','f','m','k','j','l','q','h' ].includes(key)) {
-                            e.preventDefault(); e.stopImmediatePropagation();
-                        }
-                        return;
-                    }
-
                     const isNewDoc = key === 'enter';
                     const isDeleteDoc = key === 'backspace';
+
+                    // 閲覧モード中もキーボードショートカットは使用可能。
+                    // ただし、新規作成と削除だけは誤操作防止のため無効化する。
+                    if (this.isViewMode && (isNewDoc || isDeleteDoc)) {
+                        e.preventDefault(); e.stopImmediatePropagation();
+                        return;
+                    }
 
                     if (code === 'Space') {
                         e.preventDefault(); e.stopImmediatePropagation();
@@ -4211,13 +4208,10 @@
                 const match = this.searchMatches[this.currentMatchIndex];
                 if (!match) return;
 
-                // DOMを更新してから、実際のハイライト位置を取得する。
                 this.updateSearchHighlights();
                 this.scheduleSearchHighlightRefresh();
 
-                // 検索欄から矢印キーで候補を移動している場合は、本文へフォーカスを
-                // 移さない。ここで本文をfocusすると次のArrowキーが本文のカーソル移動に
-                // 奪われてしまうため、検索欄のフォーカスを維持したまま候補だけを切り替える。
+                // 検索欄にフォーカスしたまま候補だけを移動する。
                 const keepSearchFocus = document.activeElement === this.docSearchInput;
                 if (!keepSearchFocus) {
                     this.contentInput.focus({ preventScroll: true });
@@ -4228,53 +4222,76 @@
                 }
 
                 const scrollEl = document.getElementById('editor-scroll');
-                const scrollToMatch = () => {
-                    if (!scrollEl) return;
-
-                    // オーバーレイのマーカーは再描画中に一時的に古い位置になることがあるため、
-                    // まず本文で実際に選択されている範囲の矩形を使ってスクロール位置を決める。
-                    let targetRect = null;
+                const getTargetRect = () => {
                     const selection = window.getSelection && window.getSelection();
                     if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
-                        const range = selection.getRangeAt(0);
-                        const rects = Array.from(range.getClientRects()).filter(r => r.width || r.height);
+                        const rects = Array.from(selection.getRangeAt(0).getClientRects())
+                            .filter(r => r.width || r.height);
                         if (rects.length) {
-                            const first = rects[0];
-                            const last = rects[rects.length - 1];
-                            targetRect = {
-                                top: first.top,
-                                bottom: last.bottom,
+                            return {
+                                top: Math.min(...rects.map(r => r.top)),
+                                bottom: Math.max(...rects.map(r => r.bottom)),
                                 left: Math.min(...rects.map(r => r.left)),
-                                right: Math.max(...rects.map(r => r.right)),
-                                width: Math.max(...rects.map(r => r.width)),
-                                height: last.bottom - first.top
+                                right: Math.max(...rects.map(r => r.right))
                             };
                         }
                     }
+                    const mark = this.highlightLayer &&
+                        this.highlightLayer.querySelector(`[data-search-index="${this.currentMatchIndex}"]`);
+                    return mark ? mark.getBoundingClientRect() : null;
+                };
 
-                    // 選択範囲が取れない場合だけ、検索ハイライトのマーカーを補助として使う。
-                    if (!targetRect) {
-                        const mark = this.highlightLayer &&
-                            this.highlightLayer.querySelector(`[data-search-index="${this.currentMatchIndex}"]`);
-                        if (mark) targetRect = mark.getBoundingClientRect();
-                    }
+                const scrollToMatch = () => {
+                    if (!scrollEl) return;
+                    const targetRect = getTargetRect();
                     if (!targetRect) return;
 
                     const scrollRect = scrollEl.getBoundingClientRect();
-                    const margin = Math.max(48, Math.min(96, scrollRect.height * 0.12));
-                    let delta = 0;
-                    if (targetRect.top < scrollRect.top + margin) {
-                        delta = targetRect.top - (scrollRect.top + margin);
-                    } else if (targetRect.bottom > scrollRect.bottom - margin) {
-                        delta = targetRect.bottom - (scrollRect.bottom - margin);
+                    const margin = Math.max(56, Math.min(110, scrollRect.height * 0.14));
+                    const targetCenter = (targetRect.top + targetRect.bottom) / 2;
+                    const visibleTop = scrollRect.top + margin;
+                    const visibleBottom = scrollRect.bottom - margin;
+
+                    // 候補が画面外なら、現在位置からの微調整ではなく、
+                    // 候補の絶対座標から「候補が中央付近に来るscrollTop」を計算する。
+                    if (targetRect.top < visibleTop || targetRect.bottom > visibleBottom) {
+                        const targetCenterInScroll =
+                            targetCenter - scrollRect.top + scrollEl.scrollTop;
+                        const desiredScrollTop =
+                            targetCenterInScroll - scrollRect.height / 2;
+                        const maxScrollTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+                        scrollEl.scrollTop = Math.max(0, Math.min(maxScrollTop, desiredScrollTop));
                     }
 
-                    // 候補が表示領域の外に出たら、その候補のあるページ位置まで追従させる。
-                    // 小さな補正を積み重ねるのではなく、実際の選択範囲から毎回計算する。
-                    if (Math.abs(delta) > 1) scrollEl.scrollTop += delta;
+                    // 内部スクロール後の実座標を再確認し、まだ端にある場合はもう一度補正する。
+                    requestAnimationFrame(() => {
+                        const rect = getTargetRect();
+                        if (!rect) return;
+                        const r = scrollEl.getBoundingClientRect();
+                        const safeTop = r.top + margin;
+                        const safeBottom = r.bottom - margin;
+                        if (rect.top < safeTop || rect.bottom > safeBottom) {
+                            const center = (rect.top + rect.bottom) / 2;
+                            const desired = center - r.top + scrollEl.scrollTop - r.height / 2;
+                            const max = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+                            scrollEl.scrollTop = Math.max(0, Math.min(max, desired));
+                        }
+
+                        // ページ全体がスクロール可能なレイアウトでも、候補がブラウザ画面外なら追従。
+                        requestAnimationFrame(() => {
+                            const latest = getTargetRect();
+                            if (!latest) return;
+                            const viewportMargin = 12;
+                            if (latest.top < viewportMargin || latest.bottom > window.innerHeight - viewportMargin) {
+                                const center = (latest.top + latest.bottom) / 2;
+                                const delta = center - window.innerHeight / 2;
+                                window.scrollBy({ top: delta, behavior: 'auto' });
+                            }
+                        });
+                    });
                 };
 
-                // 選択・折り返し・ハイライト描画が落ち着いた後にも位置を再確認する。
+                // レイアウト・折り返し・CSS Highlightの更新完了後に複数回確認する。
                 requestAnimationFrame(() => {
                     scrollToMatch();
                     requestAnimationFrame(() => {
