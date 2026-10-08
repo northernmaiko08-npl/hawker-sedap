@@ -3042,6 +3042,138 @@
                     this.refreshBrandDashboard();
                 };
 
+                // Clipboard formatting:
+                // - 背景色・通常文字色はコピーしない（貼り付け先のテーマに合わせる）
+                // - Type-Touchで付けた赤/オレンジ/太字だけは保持
+                // - Type-Touch間では専用MIMEを優先して、外部HTMLの装飾を誤って持ち込まない
+                const APP_INK_COLORS = new Set(['#e11d48', '#f59e0b']);
+                const normalizeColor = (value) => {
+                    if (!value) return '';
+                    const v = String(value).trim().toLowerCase().replace(/\s+/g, '');
+                    if (APP_INK_COLORS.has(v)) return v;
+                    const m = v.match(/^rgb\((\d+),(\d+),(\d+)\)$/);
+                    if (m) {
+                        const hex = '#' + [m[1], m[2], m[3]]
+                            .map(n => Number(n).toString(16).padStart(2, '0'))
+                            .join('');
+                        return APP_INK_COLORS.has(hex) ? hex : '';
+                    }
+                    return '';
+                };
+
+                const sanitizeClipboardHtml = (html, { preserveAppColors = false } = {}) => {
+                    const wrapper = document.createElement('div');
+                    wrapper.innerHTML = html || '';
+
+                    // 背景は常に破棄。貼り付け先のテーマ/紙面色に従わせる。
+                    wrapper.querySelectorAll('*').forEach(el => {
+                        el.removeAttribute('bgcolor');
+                        el.style.removeProperty('background');
+                        el.style.removeProperty('background-color');
+
+                        // 外部HTML由来の文字色は破棄。
+                        // 専用MIMEから来たType-Touchの赤/オレンジだけ復元可能。
+                        let appColor = preserveAppColors ? normalizeColor(el.style.color) : '';
+                        if (preserveAppColors && !appColor) {
+                            if (el.classList.contains('ink-red')) appColor = '#e11d48';
+                            else if (el.classList.contains('ink-orange')) appColor = '#f59e0b';
+                        }
+                        el.style.removeProperty('color');
+
+                        // 外部CSS/クラスによる背景や文字色の持ち込みを防ぐ。
+                        // Type-Touchのインク色だけは安全なインライン色として残す。
+                        el.removeAttribute('class');
+
+                        if (appColor) {
+                            el.style.color = appColor;
+                        }
+
+                        // 太字は保持する。それ以外の見た目を貼り付けない。
+                        const weight = getComputedStyle(el).fontWeight;
+                        const isBoldTag = /^(B|STRONG)$/i.test(el.tagName);
+                        if (isBoldTag || Number(weight) >= 600) {
+                            el.style.fontWeight = '900';
+                        } else {
+                            el.style.removeProperty('font-weight');
+                        }
+
+                        // フォント/サイズ/装飾/ハイライト等は貼り付け先に任せる。
+                        [
+                            'font-family', 'font-size', 'font-style', 'text-decoration',
+                            'text-decoration-color', 'text-shadow', 'letter-spacing',
+                            'line-height', 'vertical-align'
+                        ].forEach(prop => el.style.removeProperty(prop));
+
+                        // style属性が空なら削除。
+                        if (!el.getAttribute('style')) el.removeAttribute('style');
+                    });
+
+                    return wrapper.innerHTML;
+                };
+
+                const getClipboardPlainText = () => this.getText();
+
+                this.contentInput.addEventListener('copy', (e) => {
+                    const selection = window.getSelection();
+                    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+
+                    const range = selection.getRangeAt(0);
+                    if (!this.contentInput.contains(range.commonAncestorContainer)) return;
+
+                    const fragment = range.cloneContents();
+                    const holder = document.createElement('div');
+                    holder.appendChild(fragment);
+
+                    // コピー元のHTMLをサニタイズ。
+                    // app colors / bold は残し、背景と通常色は落とす。
+                    const html = sanitizeClipboardHtml(holder.innerHTML, { preserveAppColors: true });
+                    const text = selection.toString();
+
+                    e.preventDefault();
+                    e.clipboardData.setData('text/plain', text);
+                    e.clipboardData.setData('text/html', html);
+
+                    // Type-Touch同士の貼り付けでのみ「アプリで付けた色」を確実に復元。
+                    try {
+                        e.clipboardData.setData(
+                            'application/x-typetouch-html',
+                            sanitizeClipboardHtml(holder.innerHTML, { preserveAppColors: true })
+                        );
+                    } catch (_) {}
+                });
+
+                this.contentInput.addEventListener('paste', (e) => {
+                    if (this.isViewMode) return;
+
+                    const dt = e.clipboardData;
+                    if (!dt) return;
+
+                    let html = '';
+                    let isTypeTouchClipboard = false;
+
+                    try {
+                        html = dt.getData('application/x-typetouch-html');
+                        isTypeTouchClipboard = !!html;
+                    } catch (_) {}
+
+                    if (!html) {
+                        html = dt.getData('text/html');
+                    }
+
+                    // HTMLがない場合はブラウザ標準のプレーンテキスト貼り付けに任せる。
+                    if (!html) return;
+
+                    // 外部からのHTMLは色をすべて捨てる。
+                    // Type-Touch専用MIMEだけ、アプリで付けた赤/オレンジを復元する。
+                    const safeHtml = sanitizeClipboardHtml(html, {
+                        preserveAppColors: isTypeTouchClipboard
+                    });
+
+                    e.preventDefault();
+                    this.contentInput.focus();
+                    document.execCommand('insertHTML', false, safeHtml);
+                });
+
                 this.contentInput.addEventListener('input', () => {
                     // 実本文が完全に空なら、空要素と過去の改行状態も破棄する。
                     if (this.getText() === '') {
