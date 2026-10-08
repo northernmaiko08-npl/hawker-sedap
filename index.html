@@ -5256,7 +5256,7 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
 
                     a.href = url;
-                    a.download = `typewriter-backup-${stamp}.json`;
+                    a.download = `typetouch-backup-${stamp}.json`;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
