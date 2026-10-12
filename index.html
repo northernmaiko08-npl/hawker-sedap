@@ -2463,7 +2463,7 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                         <div class="grid grid-cols-2 gap-y-2 text-[10px] text-stone-600">
                             <div>新規作成 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl + Enter</kbd></div>
                             <div>削除 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl + Backspace</kbd></div>
-                            <div>集中モード <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl Z</kbd></div>
+                            <div>集中モード <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl + Shift</kbd></div>
                             <div>文書内検索 / キャンセル <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl F</kbd></div>
                             <div>サウンド切替 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl M</kbd></div>
                             <div>自動同期 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl O</kbd></div>
@@ -3886,6 +3886,13 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                     const isMod = e.ctrlKey || e.metaKey;
                     if (!isMod || e.altKey) return;
 
+                    // Ctrl+Shift：集中モード切替（文字キー不要）
+                    if (e.key === 'Shift' && e.ctrlKey && !e.metaKey && !e.altKey) {
+                        e.preventDefault(); e.stopImmediatePropagation();
+                        this.audio.playToolbarClick(); this.toggleFocusMode(!this.isFocusMode);
+                        return;
+                    }
+
                     const key = e.key.toLowerCase();
                     const code = e.code;
 
@@ -3959,10 +3966,6 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                         return;
                     }
 
-                    if (key === 'z') {
-                        e.preventDefault(); e.stopImmediatePropagation();
-                        this.audio.playToolbarClick(); this.toggleFocusMode(!this.isFocusMode); return;
-                    }
                     if (key === 'f') {
                         e.preventDefault(); e.stopImmediatePropagation();
                         this.audio.playToolbarClick(); this.toggleSearchBar(!this.isSearchOpen); return;
