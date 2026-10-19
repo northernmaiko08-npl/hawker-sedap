@@ -5039,6 +5039,24 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     footer.classList.remove('translate-y-full', 'opacity-0');
                     searchBar.classList.remove('opacity-0', 'pointer-events-none');
                     exitBtn.classList.add('hidden');
+
+                    // 集中モード中に contenteditable が入力文字へ拡大時の文字サイズを
+                    // インライン書式として引き継いだ場合、解除時に本文内の文字サイズ指定を
+                    // 取り除き、通常レイアウト側の text-base / sm:text-lg に戻す。
+                    // 太字・文字色など、文字サイズ以外の書式はそのまま維持する。
+                    const editor = this.contentInput || document.getElementById('doc-content');
+                    if (editor) {
+                        editor.style.removeProperty('font-size');
+                        editor.querySelectorAll('[style]').forEach(node => {
+                            node.style.removeProperty('font-size');
+                            if (!node.getAttribute('style')?.trim()) node.removeAttribute('style');
+                        });
+                        editor.querySelectorAll('font[size]').forEach(node => {
+                            node.removeAttribute('size');
+                        });
+                    }
+                    // 本文と検索ハイライトの表示サイズを同期し直す。
+                    this.updateSearchHighlights();
                 }
                 // ヘッダー/フッターの出し入れ後に紙面高さを再計算
                 setTimeout(() => this.syncEditorHeight(), 320);
