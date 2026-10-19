@@ -2431,7 +2431,7 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         <button id="brand-action-library" class="text-left p-3 rounded-xl border border-paper-200 bg-paper-50 hover:bg-paper-100 transition-colors"><div class="text-sm">▤</div><div class="text-[11px] font-bold mt-1">ライブラリ</div><div class="text-[9px] text-stone-400 mt-0.5">文書を探す</div></button>
                         <button id="brand-action-search" class="text-left p-3 rounded-xl border border-paper-200 bg-paper-50 hover:bg-paper-100 transition-colors"><div class="text-sm">⌕</div><div class="text-[11px] font-bold mt-1">文書内検索</div><div class="text-[9px] text-stone-400 mt-0.5">Ctrl / ⌘ + F</div></button>
-                        <button id="brand-action-view" class="text-left p-3 rounded-xl border border-paper-200 bg-paper-50 hover:bg-paper-100 transition-colors"><div class="text-sm">◉</div><div id="brand-action-view-label" class="text-[11px] font-bold mt-1">閲覧モード</div><div class="text-[9px] text-stone-400 mt-0.5">表示を切替</div></button>
+                        <button id="brand-action-view" class="text-left p-3 rounded-xl border border-paper-200 bg-paper-50 hover:bg-paper-100 transition-colors"><div class="text-sm">◉</div><div id="brand-action-view-label" class="text-[11px] font-bold mt-1">閲覧モード</div><div class="text-[9px] text-stone-400 mt-0.5">Ctrl + Alt で切替</div></button>
                         <button id="brand-action-focus" class="text-left p-3 rounded-xl border border-paper-200 bg-paper-50 hover:bg-paper-100 transition-colors"><div class="text-sm">⛶</div><div class="text-[11px] font-bold mt-1">集中モード</div><div class="text-[9px] text-stone-400 mt-0.5">執筆に集中</div></button>
                     </div>
                 </section>
@@ -2467,7 +2467,7 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                             <div>文書内検索 / キャンセル <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl F</kbd></div>
                             <div>サウンド切替 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl M</kbd></div>
                             <div>自動同期 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl O</kbd></div>
-                            <div>閲覧 / 編集切替 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl X</kbd></div>
+                            <div>閲覧 / 編集切替 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl + Alt</kbd></div>
                             <div>通常 / ダーク切替 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Ctrl + Space</kbd></div>
                             <div>候補移動 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">↑↓</kbd></div>
                             <div>改行 <kbd class="font-mono bg-paper-100 border border-paper-200 px-1 rounded">Enter</kbd></div>
@@ -3468,6 +3468,30 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                 // 初回レイアウト確定後に高さ合わせ
                 requestAnimationFrame(() => this.syncEditorHeight());
 
+                // 削除直後はブラウザがキャレットの書式状態をリセットすることがある。
+                // beforeinput で削除操作を記録し、実際のDOM更新後(input)にアクティブ書式を復元する。
+                // keydown の setTimeout だけに依存すると、ブラウザによっては復元前後の順序が不安定になる。
+                let restoreFormattingAfterDelete = false;
+                this.contentInput.addEventListener('beforeinput', (e) => {
+                    // 黒字・太字OFFも「明示的な書式状態」。装飾ボタンがOFFでも
+                    // 削除位置に残った span の書式が次の入力へ漏れるため、すべての削除で復元する。
+                    if (e.inputType && /^delete/.test(e.inputType)) {
+                        restoreFormattingAfterDelete = true;
+                    }
+                });
+                this.contentInput.addEventListener('input', () => {
+                    if (!restoreFormattingAfterDelete) return;
+                    restoreFormattingAfterDelete = false;
+                    // input イベント時点で削除後のキャレット位置が確定している。
+                    // ブラウザが入力後に選択範囲を作り直すことがあるので、次フレームでも再適用。
+                    this.restoreActiveFormattingAtCaret();
+                    requestAnimationFrame(() => {
+                        if (document.activeElement === this.contentInput) {
+                            this.restoreActiveFormattingAtCaret();
+                        }
+                    });
+                });
+
                 // Keypress Audio Feedback with smart Delete / Arrow handling
                 const ignoredKeys = [
                     'Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab', 'Escape',
@@ -3490,13 +3514,11 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                     const value = this.getText();
                     const isComposing = e.isComposing || e.key === 'Process';
 
-                    // アクティブなインク色を維持
-                    if (this.activeInk && e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-                        const map = { red: '#e11d48', orange: '#f59e0b' };
-                        try {
-                            document.execCommand('styleWithCSS', false, true);
-                            document.execCommand('foreColor', false, map[this.activeInk]);
-                        } catch (_) {}
+                    // 入力前にも選択中の書式をキャレットへ適用する。
+                    // 色だけでなく太字も毎回確認し、Delete後にブラウザが書式状態を解除しても
+                    // 次の入力文字が選択中のエフェクトで挿入されるようにする。
+                    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && !isComposing) {
+                        this.restoreActiveFormattingAtCaret();
                     }
 
                     // === ここが正しい修正です ===
@@ -3533,6 +3555,13 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                         } else if (!isComposing && hasSelection) {
                             this.explicitLineBreaks = Math.max(0, this.explicitLineBreaks - (value.slice(start, end).match(/\n/g) || []).length);
                         }
+                        if (!isComposing) {
+                            requestAnimationFrame(() => {
+                                if (document.activeElement === this.contentInput) {
+                                    this.restoreActiveFormattingAtCaret();
+                                }
+                            });
+                        }
                         return;
                     }
 
@@ -3545,6 +3574,18 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                             this.explicitLineBreaks = Math.max(0, this.explicitLineBreaks - 1);
                         } else if (!isComposing && hasSelection) {
                             this.explicitLineBreaks = Math.max(0, this.explicitLineBreaks - (value.slice(start, end).match(/\n/g) || []).length);
+                        }
+
+                        // Delete後にブラウザがキャレット位置の装飾状態を解除する場合があるため、
+                        // 削除処理が終わってから、選択中のインク色・太字を入力状態へ戻す。
+                        if (!isComposing) {
+                            // 装飾ONの場合だけでなく、通常の黒字・太字OFFでも復元する。
+                            // inputイベント側の復元と競合しても、最後に選択中の設定へ揃える。
+                            requestAnimationFrame(() => {
+                                if (document.activeElement === this.contentInput) {
+                                    this.restoreActiveFormattingAtCaret();
+                                }
+                            });
                         }
                         return;
                     }
@@ -3883,6 +3924,15 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                 // Keyboard shortcuts
                 // アプリ側のショートカットを最優先で処理する。
                 const handleAppShortcut = (e) => {
+                    // Ctrl+Alt：閲覧 / 編集モード切替（文字キー不要）
+                    // modifierキーだけのショートカットなので、Altキー押下時に一度だけ処理する。
+                    if ((e.key === 'Alt' || e.key === 'Control') && e.ctrlKey && e.altKey && !e.metaKey && !e.repeat) {
+                        e.preventDefault(); e.stopImmediatePropagation();
+                        this.audio.playReturnBell();
+                        this.setViewMode(!this.isViewMode);
+                        return;
+                    }
+
                     const isMod = e.ctrlKey || e.metaKey;
                     if (!isMod || e.altKey) return;
 
@@ -3902,14 +3952,6 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                         e.preventDefault(); e.stopImmediatePropagation();
                         this.audio.playToolbarClick();
                         document.getElementById('header-sync-btn')?.click();
-                        return;
-                    }
-
-                    // 閲覧/編集モード切替：閲覧中でも唯一有効
-                    if (key === 'x') {
-                        e.preventDefault(); e.stopImmediatePropagation();
-                        this.audio.playReturnBell();
-                        this.setViewMode(!this.isViewMode);
                         return;
                     }
 
@@ -6082,43 +6124,126 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 if (colorCss) {
                     document.execCommand('foreColor', false, colorCss);
                 } else {
-                    // 標準色へ
+                    // 標準色へ戻す。removeFormat は太字など別の装飾まで消してしまうため使わない。
                     document.execCommand('foreColor', false, this.isDarkMode ? '#e8e4f0' : '#2b2927');
-                    // 可能なら style 解除
-                    try {
-                        document.execCommand('removeFormat', false, null);
-                    } catch (_) {}
                 }
             }
 
+            resetOneShotTypingFormatAtSelectionEnd() {
+                // 選択文字への一回限りの装飾後、選択末尾へキャレットを移し、
+                // 次に入力する文字には装飾を引き継がせない。
+                const selection = window.getSelection();
+                if (!selection || !selection.rangeCount) return;
+                const range = selection.getRangeAt(0).cloneRange();
+                range.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                try {
+                    document.execCommand('styleWithCSS', false, true);
+                    document.execCommand('foreColor', false, this.isDarkMode ? '#e8e4f0' : '#2b2927');
+                    if (document.queryCommandState('bold')) {
+                        document.execCommand('bold', false, null);
+                    }
+                } catch (_) {}
+            }
+
             setActiveInk(ink) {
-                // 同じ色をもう一度 → 色だけ解除。太字など他の装飾は絶対に変更しない。
+                const selection = window.getSelection();
+                const hasSelectedText = !!(
+                    selection && !selection.isCollapsed && selection.rangeCount > 0 &&
+                    this.contentInput.contains(selection.getRangeAt(0).commonAncestorContainer)
+                );
+                const map = { red: '#e11d48', orange: '#f59e0b' };
+
+                if (hasSelectedText) {
+                    // 選択中の文字への装飾は一回限り。入力用の色状態・ボタン状態は保持しない。
+                    this.activeInk = null;
+                    document.getElementById('ink-red-btn').classList.remove('active-ink');
+                    document.getElementById('ink-orange-btn').classList.remove('active-ink');
+                    this.applyInkToSelectionOrCaret(map[ink]);
+                    this.resetOneShotTypingFormatAtSelectionEnd();
+                    return;
+                }
+
+                // キャレット位置で使った場合のみ、以降の入力用として色を保持する。
                 this.activeInk = (this.activeInk === ink) ? null : ink;
                 document.getElementById('ink-red-btn').classList.toggle('active-ink', this.activeInk === 'red');
                 document.getElementById('ink-orange-btn').classList.toggle('active-ink', this.activeInk === 'orange');
-
-                const map = { red: '#e11d48', orange: '#f59e0b' };
                 this.applyInkToSelectionOrCaret(this.activeInk ? map[this.activeInk] : null);
             }
 
             setActiveBold() {
-                // トグル: 同じボタン再クリックで解除
-                this.activeBold = !this.activeBold;
+                const selection = window.getSelection();
+                const hasSelectedText = !!(
+                    selection && !selection.isCollapsed && selection.rangeCount > 0 &&
+                    this.contentInput.contains(selection.getRangeAt(0).commonAncestorContainer)
+                );
                 const btn = document.getElementById('bold-btn');
+
+                if (hasSelectedText) {
+                    // 選択中の文字だけ太字を切り替え、次の入力に向けた状態は残さない。
+                    this.activeBold = false;
+                    if (btn) btn.classList.remove('active-ink');
+                    this.contentInput.focus();
+                    try {
+                        document.execCommand('styleWithCSS', false, true);
+                    } catch (_) {}
+                    document.execCommand('bold', false, null);
+                    this.resetOneShotTypingFormatAtSelectionEnd();
+                    return;
+                }
+
+                // キャレット位置で使った場合は、従来どおり入力用の太字状態をトグルする。
+                this.activeBold = !this.activeBold;
                 if (btn) btn.classList.toggle('active-ink', this.activeBold);
 
                 this.contentInput.focus();
                 try {
                     document.execCommand('styleWithCSS', false, true);
                 } catch (_) {}
-                // 選択範囲があればそれに、なければ以降の入力に bold 状態を適用
                 document.execCommand('bold', false, null);
 
-                // execCommand はトグルなので、状態とズレたらもう一度揃える
                 const isBold = document.queryCommandState('bold');
                 if (this.activeBold !== isBold) {
                     document.execCommand('bold', false, null);
                 }
+            }
+
+            restoreActiveFormattingAtCaret() {
+                if (this.isViewMode || !this.contentInput) return;
+                // 削除後のキャレットに適用する。選択範囲が残っていたら触らない。
+                const selection = window.getSelection();
+                if (selection && !selection.isCollapsed) return;
+                // 全文をDeleteした場合など、ブラウザが削除済みノード上に
+                // キャレットを残すことがある。その場合は本文末尾へ置き直す。
+                if (!selection || !this.contentInput.contains(selection.anchorNode)) {
+                    this.contentInput.focus();
+                    const range = document.createRange();
+                    range.selectNodeContents(this.contentInput);
+                    range.collapse(false);
+                    const currentSelection = window.getSelection();
+                    currentSelection.removeAllRanges();
+                    currentSelection.addRange(range);
+                }
+
+                this.contentInput.focus();
+                try {
+                    document.execCommand('styleWithCSS', false, true);
+                    const colors = { red: '#e11d48', orange: '#f59e0b' };
+                    // 色が未選択 (activeInk === null) の場合も標準色を明示的に設定する。
+                    // これを省くと、削除後に赤/オレンジの span 内へキャレットが残り、
+                    // 通常の黒字で入力したつもりでも直前の色が引き継がれてしまう。
+                    const intendedColor = this.activeInk && colors[this.activeInk]
+                        ? colors[this.activeInk]
+                        : (this.isDarkMode ? '#e8e4f0' : '#2b2927');
+                    document.execCommand('foreColor', false, intendedColor);
+
+                    // 太字は選択中の状態に合わせる。黒字へ戻すときも太字設定は壊さない。
+                    const shouldBeBold = !!this.activeBold;
+                    if (document.queryCommandState('bold') !== shouldBeBold) {
+                        document.execCommand('bold', false, null);
+                    }
+                } catch (_) {}
             }
 
             async deleteCurrentDocument() {
