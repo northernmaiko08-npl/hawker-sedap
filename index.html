@@ -3115,6 +3115,9 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                 this.autoBackupSyncInProgress = false;
                 this.autoBackupSyncPending = false;
                 this.autoBackupSyncTimer = null;
+                this.autoBackupRetryTimer = null;
+                this.autoBackupRetryCount = 0;
+                this.autoBackupLastError = null;
                 this.backupConfig = { backupFileHandle: null, backupFileName: 'typetouch-backup.json', lastBackup: null };
 
                 // Elements
@@ -3163,7 +3166,7 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                         if (this.autoBackupSyncTimer) clearTimeout(this.autoBackupSyncTimer);
                         this.autoBackupSyncTimer = setTimeout(async () => {
                             this.autoBackupSyncTimer = null;
-                            if (await this.isAutomaticBackupUsable()) {
+                            if (this.hasAutomaticBackupConfigured()) {
                                 await this.syncAutoBackupFile(false, true);
                             }
                         }, 500);
@@ -3171,6 +3174,7 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                     document.addEventListener('visibilitychange', retryAutoSync);
                     window.addEventListener('focus', retryAutoSync);
                     window.addEventListener('pageshow', retryAutoSync);
+                    window.addEventListener('online', retryAutoSync);
 
                     const savedViewMode = localStorage.getItem('typewriter-view-mode') === 'true';
                     this.setViewMode(savedViewMode, { silent: true });
@@ -4949,7 +4953,7 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                         this.showToast('IndexedDBに保存しました');
                     }
                     await this.loadDocumentList();
-                    if (await this.isAutomaticBackupUsable()) await this.syncAutoBackupFile(false, true);
+                    if (this.hasAutomaticBackupConfigured()) await this.syncAutoBackupFile(false, true);
                 } catch (err) {
                     console.error('Save failed:', err);
                     this.showToast('保存に失敗しました');
@@ -5308,12 +5312,7 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                         this.backupConfig.lastBackup = null;
                         await this.db.saveBackupConfig(this.backupConfig);
                         const success = await this.syncAutoBackupFile(true, false);
-                        if (!success) {
-                            this.backupConfig.backupFileHandle = null;
-                            this.backupConfig.backupFileName = 'typetouch-backup.json';
-                            this.backupConfig.lastBackup = null;
-                            await this.db.saveBackupConfig(this.backupConfig);
-                        }
+                        // 一時的な書き込み失敗でも保存先の登録を保持し、再試行できるようにする。
                         return success;
                     }
 
@@ -5385,13 +5384,8 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     this.backupConfig.lastBackup = null;
                     await this.db.saveBackupConfig(this.backupConfig);
                     const success = await this.syncAutoBackupFile(true, false);
-                    if (!success) {
-                        this.backupConfig.backupFileHandle = null;
-                        this.backupConfig.backupFileName = 'typetouch-backup.json';
-                        this.backupConfig.lastBackup = null;
-                        await this.db.saveBackupConfig(this.backupConfig);
-                    }
-                    return success;
+                        // 一時的な書き込み失敗でも保存先の登録を保持し、再試行できるようにする。
+                        return success;
                 } catch (err) {
                     if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) {
                         await this.updateAutomaticBackupUI();
@@ -5404,11 +5398,22 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 }
             }
 
+            scheduleAutomaticBackupRetry() {
+                if (!this.hasAutomaticBackupConfigured() || this.autoBackupRetryTimer) return;
+                // 2, 4, 8, 16... seconds, capped at 60 seconds.
+                const delay = Math.min(60000, 2000 * Math.pow(2, Math.min(this.autoBackupRetryCount, 5)));
+                this.autoBackupRetryCount = Math.min(this.autoBackupRetryCount + 1, 6);
+                this.autoBackupRetryTimer = setTimeout(async () => {
+                    this.autoBackupRetryTimer = null;
+                    if (document.visibilityState !== 'hidden' && this.hasAutomaticBackupConfigured()) {
+                        await this.syncAutoBackupFile(false, true);
+                    }
+                }, delay);
+            }
+
             async syncAutoBackupFile(force = false, silentFailure = false) {
                 if (!this.hasAutomaticBackupConfigured()) {
-                    if (force && !silentFailure) {
-                        return await this.setupAutomaticBackup();
-                    }
+                    if (force && !silentFailure) return await this.setupAutomaticBackup();
                     return false;
                 }
                 if (this.autoBackupSyncInProgress) {
@@ -5417,32 +5422,29 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 }
 
                 this.autoBackupSyncInProgress = true;
+                let syncSucceeded = false;
                 await this.updateAutomaticBackupUI();
 
                 try {
                     const handle = this.backupConfig.backupFileHandle;
+                    if (!handle) return false;
 
-                    // 登録先が削除・移動されていないかを確認する。
-                    // 消えていた場合は、明示的な自動同期操作なら
-                    // 新しいJSON保存先をその場で選び直す。
+                    // 保存先が存在することを確認。見つからない場合は登録を解除して再設定を促す。
                     try {
-                        if (typeof handle.getFile === 'function') {
-                            await handle.getFile();
-                        }
+                        if (typeof handle.getFile === 'function') await handle.getFile();
                     } catch (err) {
                         if (err && (err.name === 'NotFoundError' || err.name === 'InvalidStateError')) {
                             this.backupConfig.backupFileHandle = null;
                             this.backupConfig.backupFileName = 'typetouch-backup.json';
                             this.backupConfig.lastBackup = null;
+                            this.autoBackupLastError = '保存先ファイルが見つかりません';
                             await this.db.saveBackupConfig(this.backupConfig);
-
                             if (force && !silentFailure) {
                                 this.autoBackupSyncInProgress = false;
                                 await this.updateAutomaticBackupUI();
                                 return await this.setupAutomaticBackup();
                             }
-
-                            await this.updateAutomaticBackupUI();
+                            if (!silentFailure) this.showToast('自動同期先が見つかりません。保存先を再設定してください。');
                             return false;
                         }
                         throw err;
@@ -5452,30 +5454,23 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     if (typeof handle.queryPermission === 'function') {
                         permission = await handle.queryPermission({ mode: 'readwrite' });
                     }
-
-                    // バックグラウンド同期では権限ダイアログを出さない。
-                    // 明示的な操作時だけ force=true で requestPermission() を実行する。
                     if (permission !== 'granted') {
-                        if (!force) {
-                            await this.updateAutomaticBackupUI();
+                        if (!force || typeof handle.requestPermission !== 'function') {
+                            this.autoBackupLastError = '保存先へのアクセス許可が必要です';
+                            this.scheduleAutomaticBackupRetry();
+                            if (!silentFailure) this.showToast('自動同期には保存先へのアクセス許可が必要です。同期設定から許可してください。');
                             return false;
                         }
-
-                        if (typeof handle.requestPermission !== 'function') {
-                            await this.updateAutomaticBackupUI();
-                            return false;
-                        }
-
                         permission = await handle.requestPermission({ mode: 'readwrite' });
                         if (permission !== 'granted') {
-                            await this.updateAutomaticBackupUI();
+                            this.autoBackupLastError = '保存先へのアクセス許可がありません';
+                            this.scheduleAutomaticBackupRetry();
                             return false;
                         }
                     }
 
                     const payload = await this.buildBackupPayload();
                     const writable = await handle.createWritable();
-
                     try {
                         await writable.write(JSON.stringify(payload, null, 2));
                         await writable.close();
@@ -5486,12 +5481,19 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
 
                     this.backupConfig.lastBackup = Date.now();
                     await this.db.saveBackupConfig(this.backupConfig);
+                    this.autoBackupLastError = null;
+                    this.autoBackupRetryCount = 0;
+                    if (this.autoBackupRetryTimer) clearTimeout(this.autoBackupRetryTimer);
+                    this.autoBackupRetryTimer = null;
+                    syncSucceeded = true;
                     if (!silentFailure) this.showToast('自動同期しました');
                     return true;
                 } catch (err) {
+                    this.autoBackupLastError = err?.message || '自動同期に失敗しました';
                     console.error('Automatic backup sync failed:', err);
+                    this.scheduleAutomaticBackupRetry();
                     if (!silentFailure) {
-                        this.showToast('自動同期に失敗しました。保存先のアクセス権を確認してください。');
+                        this.showToast('自動同期に失敗しました。端末内のデータは保持され、再試行します。');
                     }
                     return false;
                 } finally {
@@ -5500,6 +5502,8 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     if (this.autoBackupSyncPending) {
                         this.autoBackupSyncPending = false;
                         queueMicrotask(() => this.syncAutoBackupFile(false, true));
+                    } else if (!syncSucceeded && this.hasAutomaticBackupConfigured()) {
+                        this.scheduleAutomaticBackupRetry();
                     }
                 }
             }
@@ -5564,7 +5568,9 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 if (syncStatus) {
                     syncStatus.textContent = this.autoBackupSyncInProgress
                         ? 'JSONバックアップを更新しています…'
-                        : `保存先：${this.backupConfig.backupFileName || 'typetouch-backup.json'}`;
+                        : this.autoBackupLastError
+                            ? `同期待ち：${this.autoBackupLastError}（自動再試行します）`
+                            : `保存先：${this.backupConfig.backupFileName || 'typetouch-backup.json'}`;
                 }
 
                 const last = this.backupConfig.lastBackup ? new Date(this.backupConfig.lastBackup) : null;
