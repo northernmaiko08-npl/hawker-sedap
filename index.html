@@ -3195,7 +3195,7 @@ body.dark #delete-doc-btn:hover > svg {
                 this.autoBackupRetryTimer = null;
                 this.autoBackupRetryCount = 0;
                 this.autoBackupLastError = null;
-                this.backupConfig = { backupFileHandle: null, backupFileName: 'typetouch-backup.json', lastBackup: null };
+                this.backupConfig = { backupFileHandle: null, backupFileName: 'type-touch_auto_backup.json', lastBackup: null };
 
                 // Elements
                 this.titleInput = document.getElementById('doc-title');
@@ -5494,7 +5494,7 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                             return false;
                         }
                         fileHandle = await window.showSaveFilePicker({
-                            suggestedName: 'typetouch-backup.json',
+                            suggestedName: 'type-touch_auto_backup.json',
                             types: [{
                                 description: 'Type-Touch JSONバックアップ',
                                 accept: { 'application/json': ['.json'] }
@@ -5519,7 +5519,7 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                         }
 
                         this.backupConfig.backupFileHandle = fileHandle;
-                        this.backupConfig.backupFileName = fileHandle.name || 'typetouch-backup.json';
+                        this.backupConfig.backupFileName = fileHandle.name || 'type-touch_auto_backup.json';
                         this.backupConfig.lastBackup = null;
                         await this.db.saveBackupConfig(this.backupConfig);
                         const success = await this.syncAutoBackupFile(true, false);
@@ -5591,7 +5591,7 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     else this.createNewDocument();
 
                     this.backupConfig.backupFileHandle = fileHandle;
-                    this.backupConfig.backupFileName = fileHandle.name || 'typetouch-backup.json';
+                    this.backupConfig.backupFileName = fileHandle.name || 'type-touch_auto_backup.json';
                     this.backupConfig.lastBackup = null;
                     await this.db.saveBackupConfig(this.backupConfig);
                     const success = await this.syncAutoBackupFile(true, false);
@@ -5677,7 +5677,7 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     } catch (err) {
                         if (err && (err.name === 'NotFoundError' || err.name === 'InvalidStateError')) {
                             this.backupConfig.backupFileHandle = null;
-                            this.backupConfig.backupFileName = 'typetouch-backup.json';
+                            this.backupConfig.backupFileName = 'type-touch_auto_backup.json';
                             this.backupConfig.lastBackup = null;
                             this.autoBackupLastError = '保存先ファイルが見つかりません';
                             await this.db.saveBackupConfig(this.backupConfig);
@@ -5781,7 +5781,7 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                         setupBtn.textContent = 'アクセスを許可';
                     } else if (configured && usable) {
                         setupTitle.textContent = '自動同期';
-                        setupStatus.textContent = `保存先：${this.backupConfig.backupFileName || 'typetouch-backup.json'}`;
+                        setupStatus.textContent = `保存先：${this.backupConfig.backupFileName || 'type-touch_auto_backup.json'}`;
                         setupBtn.textContent = '保存先を変更';
                     } else {
                         setupTitle.textContent = '自動同期';
@@ -5812,7 +5812,7 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                         ? 'JSONバックアップを更新しています…'
                         : this.autoBackupLastError
                             ? `同期待ち：${this.autoBackupLastError}（自動再試行します）`
-                            : `保存先：${this.backupConfig.backupFileName || 'typetouch-backup.json'}`;
+                            : `保存先：${this.backupConfig.backupFileName || 'type-touch_auto_backup.json'}`;
                 }
 
                 const last = this.backupConfig.lastBackup ? new Date(this.backupConfig.lastBackup) : null;
@@ -5849,10 +5849,10 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     btn.title = '自動同期にアクセス許可が必要です（タップで許可）';
                 } else if (usable && due) {
                     dot.classList.add('sync-dot-warn');
-                    btn.title = `同期先：${this.backupConfig.backupFileName || 'typetouch-backup.json'} ／ ${fmtLast()}（タップで今すぐ同期）`;
+                    btn.title = `同期先：${this.backupConfig.backupFileName || 'type-touch_auto_backup.json'} ／ ${fmtLast()}（タップで今すぐ同期）`;
                 } else {
                     dot.classList.add('sync-dot-ok');
-                    btn.title = `同期済み：${this.backupConfig.backupFileName || 'typetouch-backup.json'} ／ ${fmtLast()}（タップで今すぐ同期）`;
+                    btn.title = `同期済み：${this.backupConfig.backupFileName || 'type-touch_auto_backup.json'} ／ ${fmtLast()}（タップで今すぐ同期）`;
                 }
             }
 
@@ -5878,10 +5878,15 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
-                    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+                    const now = new Date();
+                    const stamp = [
+                        now.getFullYear(),
+                        String(now.getMonth() + 1).padStart(2, '0'),
+                        String(now.getDate()).padStart(2, '0')
+                    ].join('-');
 
                     a.href = url;
-                    a.download = `typetouch-backup-${stamp}.json`;
+                    a.download = `type-touch_manual_backup_${stamp}.json`;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
