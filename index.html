@@ -3253,15 +3253,6 @@ body.dark #delete-doc-btn:hover > svg {
                     window.addEventListener('pageshow', retryAutoSync);
                     window.addEventListener('online', retryAutoSync);
 
-                    // ブラウザ再起動後にファイルアクセス権限が prompt に戻った場合、
-                    // 最初のユーザー操作をきっかけに権限を再取得して自動同期を再開する。
-                    // File System Access API の requestPermission() はユーザー操作が必要。
-                    const resumeSavedBackupOnGesture = () => {
-                        this.resumeAutomaticBackupPermission();
-                    };
-                    window.addEventListener('pointerdown', resumeSavedBackupOnGesture, { once: true, capture: true });
-                    window.addEventListener('keydown', resumeSavedBackupOnGesture, { once: true, capture: true });
-
                     const savedViewMode = localStorage.getItem('typewriter-view-mode') === 'true';
                     this.setViewMode(savedViewMode, { silent: true });
 
@@ -4122,7 +4113,15 @@ body.dark #delete-doc-btn:hover > svg {
                     e.target.value = ''; // 同じファイル再選択可能に
                 });
 
-                document.getElementById('typewriter-auto-setup-btn')?.addEventListener('click', () => this.setupAutomaticBackup());
+                document.getElementById('typewriter-auto-setup-btn')?.addEventListener('click', () => {
+                    // 権限が必要な場合はクリック直後に requestPermission() を開始する。
+                    // それ以外は保存先の新規設定・変更画面を開く。
+                    if (this.hasAutomaticBackupConfigured() && this.autoBackupNeedsPermission) {
+                        this.resumeAutomaticBackupPermission();
+                    } else {
+                        this.setupAutomaticBackup();
+                    }
+                });
                 document.getElementById('typewriter-sync-btn')?.addEventListener('click', () => this.syncAutoBackupFile(false, false));
                 document.getElementById('typewriter-manual-backup-btn')?.addEventListener('click', () => this.exportAllData());
 
@@ -5505,24 +5504,16 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                             return false;
                         }
 
-                        let permission = 'granted';
-                        if (typeof fileHandle.queryPermission === 'function') {
-                            permission = await fileHandle.queryPermission({ mode: 'readwrite' });
-                        }
-                        if (permission !== 'granted' && typeof fileHandle.requestPermission === 'function') {
-                            permission = await fileHandle.requestPermission({ mode: 'readwrite' });
-                        }
-                        if (permission !== 'granted') {
-                            this.showToast('ファイルへの読み書き権限が必要です');
-                            await this.updateAutomaticBackupUI();
-                            return false;
-                        }
-
+                        // ファイル選択ダイアログでユーザーが選んだハンドルを先に保存する。
+                        // picker後の非同期処理中に requestPermission() を呼ぶと、
+                        // transient user activation が失われて拒否されるブラウザがある。
+                        // 権限が不足している場合は設定を保持し、画面上の「アクセスを許可」から
+                        // ユーザー操作として改めて権限を要求する。
                         this.backupConfig.backupFileHandle = fileHandle;
-                        this.backupConfig.backupFileName = fileHandle.name || 'type-touch_auto_backup.json';
+                        this.backupConfig.backupFileName = 'type-touch_auto_backup.json';
                         this.backupConfig.lastBackup = null;
                         await this.db.saveBackupConfig(this.backupConfig);
-                        const success = await this.syncAutoBackupFile(true, false);
+                        const success = await this.syncAutoBackupFile(false, false);
                         // 一時的な書き込み失敗でも保存先の登録を保持し、再試行できるようにする。
                         return success;
                     }
@@ -5547,19 +5538,8 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                         return false;
                     }
 
-                    let permission = 'granted';
-                    if (typeof fileHandle.queryPermission === 'function') {
-                        permission = await fileHandle.queryPermission({ mode: 'readwrite' });
-                    }
-                    if (permission !== 'granted' && typeof fileHandle.requestPermission === 'function') {
-                        permission = await fileHandle.requestPermission({ mode: 'readwrite' });
-                    }
-                    if (permission !== 'granted') {
-                        this.showToast('ファイルへの読み書き権限が必要です');
-                        await this.updateAutomaticBackupUI();
-                        return false;
-                    }
-
+                    // 読み込みはファイル選択で得た読み取り権限で実施する。
+                    // 書き込み権限が必要な場合は、復元後の「アクセスを許可」操作で取得する。
                     const selectedFile = await fileHandle.getFile();
                     const rawText = await selectedFile.text();
                     let parsed;
@@ -5594,9 +5574,9 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     this.backupConfig.backupFileName = fileHandle.name || 'type-touch_auto_backup.json';
                     this.backupConfig.lastBackup = null;
                     await this.db.saveBackupConfig(this.backupConfig);
-                    const success = await this.syncAutoBackupFile(true, false);
-                        // 一時的な書き込み失敗でも保存先の登録を保持し、再試行できるようにする。
-                        return success;
+                    const success = await this.syncAutoBackupFile(false, false);
+                    // 書き込み権限が未取得なら、保存先を保持して明示的な許可操作を案内する。
+                    return success;
                 } catch (err) {
                     if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) {
                         await this.updateAutomaticBackupUI();
@@ -5616,8 +5596,9 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 try {
                     let permission = 'prompt';
 
-                    // requestPermission() をユーザー操作の有効期間内に呼び出すため、
-                    // queryPermission() の await より先に実行する。
+                    // このメソッドは許可ボタンの click ハンドラーから直接呼ぶ。
+                    // 最初の await より前に requestPermission() を開始し、
+                    // ブラウザのユーザー操作要件を満たす。
                     if (typeof handle.requestPermission === 'function') {
                         permission = await handle.requestPermission({ mode: 'readwrite' });
                     } else if (typeof handle.queryPermission === 'function') {
@@ -5697,18 +5678,13 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                         permission = await handle.queryPermission({ mode: 'readwrite' });
                     }
                     if (permission !== 'granted') {
-                        if (!force || typeof handle.requestPermission !== 'function') {
-                            this.autoBackupLastError = '保存先へのアクセス許可が必要です';
-                            this.scheduleAutomaticBackupRetry();
-                            if (!silentFailure) this.showToast('自動同期には保存先へのアクセス許可が必要です。同期設定から許可してください。');
-                            return false;
-                        }
-                        permission = await handle.requestPermission({ mode: 'readwrite' });
-                        if (permission !== 'granted') {
-                            this.autoBackupLastError = '保存先へのアクセス許可がありません';
-                            this.scheduleAutomaticBackupRetry();
-                            return false;
-                        }
+                        // 自動処理・非同期処理からは権限ダイアログを出さない。
+                        // requestPermission() はヘッダー同期ボタンまたは設定画面の
+                        // 「アクセスを許可」ボタンのクリックからのみ呼び出す。
+                        this.autoBackupLastError = '保存先へのアクセス許可が必要です';
+                        this.scheduleAutomaticBackupRetry();
+                        if (!silentFailure) this.showToast('保存先へのアクセス許可が必要です。設定画面の「アクセスを許可」を押してください。');
+                        return false;
                     }
 
                     const payload = await this.buildBackupPayload();
@@ -5767,6 +5743,7 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 const supported = this.supportsAutomaticBackup();
                 const configured = this.hasAutomaticBackupConfigured();
                 const usable = await this.isAutomaticBackupUsable();
+                this.autoBackupNeedsPermission = configured && !usable;
 
                 // 「今すぐ同期」は実際に保存先へアクセスできるときだけ表示。
                 if (syncRow) syncRow.style.display = usable ? 'block' : 'none';
