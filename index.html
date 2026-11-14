@@ -1597,34 +1597,26 @@
             color: #ffffff;
             text-shadow: 0 0 0.01px currentColor;
         }
-        /* 新規作成・削除：アイコン本体だけを、より濃くはっきりホバー発光 */
+        /* 新規作成・削除：ホバー時の発光は控えめにする */
         #new-doc-btn:hover { color: #15803d; }
         #delete-doc-btn:hover { color: #b91c1c; }
         #new-doc-btn > svg,
         #delete-doc-btn > svg {
-            transition: filter .18s ease;
+            transition: filter .18s ease, color .18s ease;
         }
         #new-doc-btn:hover > svg {
-            filter: drop-shadow(0 0 2px rgba(22, 163, 74, 1))
-                    drop-shadow(0 0 5px rgba(34, 197, 94, 1))
-                    drop-shadow(0 0 8px rgba(74, 222, 128, .95));
+            filter: drop-shadow(0 0 2px rgba(34, 197, 94, .28));
         }
         #delete-doc-btn:hover > svg {
-            filter: drop-shadow(0 0 2px rgba(220, 38, 38, 1))
-                    drop-shadow(0 0 5px rgba(239, 68, 68, 1))
-                    drop-shadow(0 0 8px rgba(248, 113, 113, .95));
+            filter: drop-shadow(0 0 2px rgba(239, 68, 68, .28));
         }
         body.dark #new-doc-btn:hover { color: #4ade80; }
         body.dark #delete-doc-btn:hover { color: #f87171; }
         body.dark #new-doc-btn:hover > svg {
-            filter: drop-shadow(0 0 2px rgba(74, 222, 128, 1))
-                    drop-shadow(0 0 6px rgba(34, 197, 94, 1))
-                    drop-shadow(0 0 9px rgba(22, 163, 74, .98));
+            filter: drop-shadow(0 0 2px rgba(74, 222, 128, .32));
         }
         body.dark #delete-doc-btn:hover > svg {
-            filter: drop-shadow(0 0 2px rgba(248, 113, 113, 1))
-                    drop-shadow(0 0 6px rgba(239, 68, 68, 1))
-                    drop-shadow(0 0 9px rgba(220, 38, 38, .98));
+            filter: drop-shadow(0 0 2px rgba(248, 113, 113, .32));
         }
 
 
@@ -1662,6 +1654,22 @@
         body.dark .hover\:bg-amber-900:hover { background-color: #6b21a8; }
         body.dark .text-amber-700 { color: #c084fc; }
         body.dark .text-amber-800 { color: #c084fc; }
+
+        /* ナイトモード：新規作成は緑、削除は赤を優先して表示 */
+        body.dark #new-doc-btn:hover,
+        body.dark #new-doc-btn:hover > svg {
+            color: #4ade80 !important;
+        }
+        body.dark #new-doc-btn:hover > svg {
+            filter: drop-shadow(0 0 2px rgba(74, 222, 128, .32)) !important;
+        }
+        body.dark #delete-doc-btn:hover,
+        body.dark #delete-doc-btn:hover > svg {
+            color: #f87171 !important;
+        }
+        body.dark #delete-doc-btn:hover > svg {
+            filter: drop-shadow(0 0 2px rgba(248, 113, 113, .32)) !important;
+        }
         body.dark .text-emerald-700 { color: #a78bfa; }
         body.dark .border-amber-800 { border-color: #a855f7; }
         body.dark .bg-stone-300 { background-color: #5a4d6e; }
@@ -1734,7 +1742,10 @@
             flex-direction: column;
             min-height: 12rem;
         }
+        body { --editor-text-color: #2b2927; }
+        body.dark { --editor-text-color: #eee8f8; }
         #doc-content {
+            color: var(--editor-text-color);
             flex: 1 1 auto;
             width: 100%;
             min-height: 100%;
@@ -1760,24 +1771,14 @@
         body.dark #doc-content:empty:before {
             color: #5a4d6e;
         }
-        /* 太字を極限まで強調（明朝でもはっきり重く） */
+        /* 太字は900相当の濃さに統一する。
+           輪郭線・影による二重強調は使わず、入れ子でも濃さを加算しない。 */
         #doc-content b,
         #doc-content strong {
             font-weight: 900 !important;
-            -webkit-text-stroke: 1.15px currentColor;
-            paint-order: stroke fill;
-            text-shadow:
-                0.9px 0 0 currentColor,
-                -0.9px 0 0 currentColor,
-                0 0.75px 0 currentColor,
-                0 -0.75px 0 currentColor,
-                0.7px 0.7px 0 currentColor,
-                -0.7px 0.7px 0 currentColor,
-                0.7px -0.7px 0 currentColor,
-                -0.7px -0.7px 0 currentColor,
-                1.2px 0 0 currentColor,
-                -1.2px 0 0 currentColor;
-            letter-spacing: 0.03em;
+            -webkit-text-stroke: 0;
+            text-shadow: none;
+            letter-spacing: inherit;
         }
         /* 検索ハイライトは本文と同じDOM/書式を複製して描画する。
            長文・太字・色付き文字でも折返し位置が本文とズレないようにする。 */
@@ -1891,19 +1892,13 @@
             pointer-events: none !important;
         }
     
-/* 強調表示：通常の太字との差が明確に分かるようにする */
+/* コピー元の太字は900相当の濃さで表示する。
+   ただし輪郭線・影は重ねず、入れ子のB/STRONGでも太さは900で頭打ちにする。 */
 #doc-content strong,
-#doc-content b,
-#doc-content [style*="font-weight: bold"],
-#doc-content [style*="font-weight:bold"],
-#doc-content [style*="font-weight: 700"],
-#doc-content [style*="font-weight:700"],
-#doc-content [style*="font-weight: 800"],
-#doc-content [style*="font-weight:800"],
-#doc-content [style*="font-weight: 900"],
-#doc-content [style*="font-weight:900"] {
+#doc-content b {
     font-weight: 900 !important;
-    -webkit-text-stroke: 0.35px currentColor;
+    -webkit-text-stroke: 0;
+    text-shadow: none;
 }
 
 /* 太字ボタンが有効なときも一目で分かるようにする */
@@ -2037,7 +2032,7 @@ body.dark select:focus {
 }
 body.dark .paper-bg { color: #eee8f8; }
 body.dark #paper-sheet { border-color: #453855; }
-body.dark #doc-content { color: #eee8f8; }
+body.dark #doc-content { color: var(--editor-text-color); }
 body.dark .bg-white,
 body.dark .bg-white\/50,
 body.dark .bg-white\/60,
@@ -2154,6 +2149,83 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
       });
     }
   </script>
+
+<style id="document-print-layout">
+@media print {
+    @page { margin: 16mm; }
+    html, body {
+        width: auto !important;
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+        background: #fff !important;
+    }
+    body * { visibility: hidden !important; }
+    #editor-scroll, #editor-scroll * { visibility: visible !important; }
+    #editor-scroll {
+        position: static !important;
+        display: block !important;
+        width: 100% !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        background: #fff !important;
+    }
+    #paper-sheet {
+        width: 100% !important;
+        max-width: none !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        background: #fff !important;
+        color: #000 !important;
+    }
+    #color-toolbar, #highlight-layer,
+    #paper-sheet .text-stone-400.font-mono,
+    #app-header, #app-footer, #sidebar, #sidebar-overlay,
+    #search-bar, #exit-focus-btn {
+        display: none !important;
+    }
+    #doc-title {
+        display: block !important;
+        width: 100% !important;
+        color: #000 !important;
+        background: transparent !important;
+        -webkit-text-fill-color: #000 !important;
+    }
+    #editor-body, #doc-content {
+        display: block !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+        color: #000 !important;
+        background: transparent !important;
+        -webkit-text-fill-color: #000 !important;
+        caret-color: transparent !important;
+        user-select: text !important;
+    }
+    #doc-content { white-space: pre-wrap !important; overflow-wrap: break-word !important; }
+}
+</style>
+
+
+<style id="document-action-icon-dark-hover-fix">
+/* ダークモードでも通常モードと同じ控えめなホバー発光を維持 */
+body.dark #new-doc-btn:hover { color: #4ade80 !important; }
+body.dark #delete-doc-btn:hover { color: #f87171 !important; }
+body.dark #new-doc-btn:hover > svg {
+    filter: drop-shadow(0 0 2px rgba(34, 197, 94, .28)) !important;
+}
+body.dark #delete-doc-btn:hover > svg {
+    filter: drop-shadow(0 0 2px rgba(239, 68, 68, .28)) !important;
+}
+</style>
 </head>
 <body class="h-screen flex flex-col font-serif overflow-hidden select-none">
 
@@ -2387,10 +2459,13 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 8V6.8A1.8 1.8 0 0 0 14.2 5H6.8A1.8 1.8 0 0 0 5 6.8v7.4A1.8 1.8 0 0 0 6.8 16H8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
                     </button>
                     <button id="share-btn" class="editor-action-icon" title="共有" aria-label="共有">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L8.5 7.5M12 4l3.5 3.5M5 12v6.2A1.8 1.8 0 0 0 6.8 20h10.4a1.8 1.8 0 0 0 1.8-1.8V12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="6" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="19" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m8.7 10.6 6.6-4.1M8.7 13.4l6.6 4.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
                     </button>
                     <button id="export-txt-btn" class="editor-action-icon" title=".txt書き出し" aria-label=".txt書き出し">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.8h8l4 4V20.2H6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 3.8v4h4M8.5 12.5h7M8.5 16h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                    </button>
+                    <button id="print-btn" class="editor-action-icon" title="印刷" aria-label="印刷">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V3.8h10V8M7 17H5.2A2.2 2.2 0 0 1 3 14.8v-4.6A2.2 2.2 0 0 1 5.2 8h13.6a2.2 2.2 0 0 1 2.2 2.2v4.6a2.2 2.2 0 0 1-2.2 2.2H17M7 14h10v6.2H7z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M17.2 11.5h.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
                     </button>
                 </div>
             </footer>
@@ -2524,6 +2599,8 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                         <button id="brand-action-import" class="p-3 rounded-xl border border-paper-200 bg-paper-50 hover:bg-paper-100 text-left transition-colors"><div class="text-[11px] font-bold">復元</div><div class="text-[9px] text-stone-400 mt-0.5">バックアップを読み込む</div></button>
                     </div>
                 </section>
+
+                <div class="pt-1 pb-1 text-right text-[9px] tracking-wide text-stone-400/80 font-sans select-none" aria-label="Developer credit">Developed by northern maiko (北の舞妓さん)</div>
             </div>
         </div>
     </div>
@@ -3176,6 +3253,15 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                     window.addEventListener('pageshow', retryAutoSync);
                     window.addEventListener('online', retryAutoSync);
 
+                    // ブラウザ再起動後にファイルアクセス権限が prompt に戻った場合、
+                    // 最初のユーザー操作をきっかけに権限を再取得して自動同期を再開する。
+                    // File System Access API の requestPermission() はユーザー操作が必要。
+                    const resumeSavedBackupOnGesture = () => {
+                        this.resumeAutomaticBackupPermission();
+                    };
+                    window.addEventListener('pointerdown', resumeSavedBackupOnGesture, { once: true, capture: true });
+                    window.addEventListener('keydown', resumeSavedBackupOnGesture, { once: true, capture: true });
+
                     const savedViewMode = localStorage.getItem('typewriter-view-mode') === 'true';
                     this.setViewMode(savedViewMode, { silent: true });
 
@@ -3249,138 +3335,272 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                 };
 
                 // Clipboard formatting:
-                // - 背景色・通常文字色はコピーしない（貼り付け先のテーマに合わせる）
-                // - Type-Touchで付けた赤/オレンジ/太字だけは保持
-                // - Type-Touch間では専用MIMEを優先して、外部HTMLの装飾を誤って持ち込まない
+                // - 通常文字色・背景色はコピーせず、貼り付け先テーマへ追従
+                // - Type-Touch独自の赤/オレンジ/太字だけは内部コピーで保持
+                // - 専用MIME非対応時もHTML内のマーカーで内部コピーを識別
                 const APP_INK_COLORS = new Set(['#e11d48', '#f59e0b']);
-                const normalizeColor = (value) => {
+                const normalizeClipboardColor = (value) => {
                     if (!value) return '';
                     const v = String(value).trim().toLowerCase().replace(/\s+/g, '');
                     if (APP_INK_COLORS.has(v)) return v;
-                    const m = v.match(/^rgb\((\d+),(\d+),(\d+)\)$/);
-                    if (m) {
-                        const hex = '#' + [m[1], m[2], m[3]]
-                            .map(n => Number(n).toString(16).padStart(2, '0'))
-                            .join('');
-                        return APP_INK_COLORS.has(hex) ? hex : '';
-                    }
-                    return '';
+                    const m = v.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/);
+                    if (!m || (m[4] !== undefined && Number(m[4]) < 0.99)) return '';
+                    const hex = '#' + [m[1], m[2], m[3]]
+                        .map(n => Math.max(0, Math.min(255, Number(n))).toString(16).padStart(2, '0'))
+                        .join('');
+                    return APP_INK_COLORS.has(hex) ? hex : '';
                 };
 
                 const sanitizeClipboardHtml = (html, { preserveAppColors = false } = {}) => {
                     const wrapper = document.createElement('div');
                     wrapper.innerHTML = html || '';
 
-                    // 背景は常に破棄。貼り付け先のテーマ/紙面色に従わせる。
-                    wrapper.querySelectorAll('*').forEach(el => {
-                        el.removeAttribute('bgcolor');
-                        el.style.removeProperty('background');
-                        el.style.removeProperty('background-color');
+                    // 危険な要素は内容ごと除去する。
+                    wrapper.querySelectorAll('script, style, iframe, object, embed, link, meta, svg, math').forEach(el => el.remove());
 
-                        // 外部HTML由来の文字色は破棄。
-                        // 専用MIMEから来たType-Touchの赤/オレンジだけ復元可能。
-                        let appColor = preserveAppColors ? normalizeColor(el.style.color) : '';
-                        if (preserveAppColors && !appColor) {
-                            if (el.classList.contains('ink-red')) appColor = '#e11d48';
-                            else if (el.classList.contains('ink-orange')) appColor = '#f59e0b';
+                    const allowedTags = new Set([
+                        'B', 'STRONG', 'BR', 'DIV', 'P', 'SPAN', 'FONT',
+                        'I', 'EM', 'U', 'S', 'STRIKE', 'DEL', 'SUB', 'SUP',
+                        'OL', 'UL', 'LI'
+                    ]);
+
+                    // 子孫を先に処理してから親を整える。
+                    Array.from(wrapper.querySelectorAll('*')).reverse().forEach(el => {
+                        if (!el.isConnected && !wrapper.contains(el)) return;
+                        const tag = el.tagName;
+                        const originalClass = typeof el.className === 'string' ? el.className : '';
+                        // 太字判定には「その要素自身に明示された指定」だけを使う。
+                        // getComputedStyle() は親のSTRONG/Bから継承した太字まで子要素の
+                        // 指定として判定してしまい、貼り付け時に太字が二重化する原因になる。
+                        const inlineWeight = el.style?.getPropertyValue('font-weight') || '';
+                        const isBoldTag = /^(B|STRONG)$/i.test(tag);
+                        const isBoldClass = /(?:^|\s)(?:font-bold|font-semibold|font-extrabold|font-black)(?:\s|$)/.test(originalClass);
+                        const isExplicitBoldWeight = /^(bold|bolder)$/i.test(inlineWeight) ||
+                            (/^\d+$/.test(inlineWeight.trim()) && Number(inlineWeight) >= 600);
+                        const isBold = isBoldTag || isBoldClass || isExplicitBoldWeight;
+
+                        let appColor = '';
+                        if (preserveAppColors) {
+                            appColor = normalizeClipboardColor(el.style?.color) ||
+                                normalizeClipboardColor(el.getAttribute('color')) ||
+                                normalizeClipboardColor(el.getAttribute('data-typetouch-ink'));
+                            if (!appColor && /(?:^|\s)ink-red(?:\s|$)/.test(originalClass)) appColor = '#e11d48';
+                            if (!appColor && /(?:^|\s)ink-orange(?:\s|$)/.test(originalClass)) appColor = '#f59e0b';
                         }
-                        el.style.removeProperty('color');
 
-                        // 外部CSS/クラスによる背景や文字色の持ち込みを防ぐ。
-                        // Type-Touchのインク色だけは安全なインライン色として残す。
-                        el.removeAttribute('class');
-
-                        if (appColor) {
-                            el.style.color = appColor;
+                        // 外部CSS・イベント属性・背景・通常文字色を持ち込まない。
+                        Array.from(el.attributes).forEach(attr => el.removeAttribute(attr.name));
+                        el.removeAttribute('style');
+                        if (appColor) el.style.setProperty('color', appColor);
+                        // B/STRONGは意味的な太字タグをそのまま保持し、追加のfont-weightを
+                        // 重ねない。SPAN等に明示指定されていた太字だけ元の強さで保持する。
+                        if (isBold && !isBoldTag) {
+                            el.style.setProperty('font-weight', inlineWeight.trim() || 'bold');
                         }
 
-                        // 太字は保持する。それ以外の見た目を貼り付けない。
-                        const weight = getComputedStyle(el).fontWeight;
-                        const isBoldTag = /^(B|STRONG)$/i.test(el.tagName);
-                        if (isBoldTag || Number(weight) >= 600) {
-                            el.style.fontWeight = '900';
-                        } else {
-                            el.style.removeProperty('font-weight');
+                        // 許可外のタグは中身を残してタグだけ外す。
+                        if (!allowedTags.has(tag)) {
+                            el.replaceWith(...Array.from(el.childNodes));
                         }
-
-                        // フォント/サイズ/装飾/ハイライト等は貼り付け先に任せる。
-                        [
-                            'font-family', 'font-size', 'font-style', 'text-decoration',
-                            'text-decoration-color', 'text-shadow', 'letter-spacing',
-                            'line-height', 'vertical-align'
-                        ].forEach(prop => el.style.removeProperty(prop));
-
-                        // style属性が空なら削除。
-                        if (!el.getAttribute('style')) el.removeAttribute('style');
                     });
-
+                    // contenteditableの貼り付けでDIV/Pをそのまま入れると、
+                    // 既存行の内側にブロックがネストされ文字数・改行計算が崩れる。
+                    // ブロック境界をBRへ変換し、インライン書式だけを残す。
+                    const flattenBlocks = (parent) => {
+                        const blockTags = new Set(['DIV', 'P', 'UL', 'OL', 'LI']);
+                        const nodes = Array.from(parent.childNodes);
+                        const output = document.createDocumentFragment();
+                        let hasOutput = false;
+                        let previousWasBreak = false;
+                        for (const node of nodes) {
+                            if (node.nodeType === Node.ELEMENT_NODE) {
+                                flattenBlocks(node);
+                                if (blockTags.has(node.tagName)) {
+                                    if (hasOutput && !previousWasBreak) output.appendChild(document.createElement('br'));
+                                    while (node.firstChild) output.appendChild(node.firstChild);
+                                    hasOutput = true;
+                                    previousWasBreak = !!(output.lastChild && output.lastChild.nodeName === 'BR');
+                                } else {
+                                    output.appendChild(node);
+                                    hasOutput = true;
+                                    previousWasBreak = node.tagName === 'BR';
+                                }
+                            } else {
+                                output.appendChild(node);
+                                if (node.nodeType === Node.TEXT_NODE && (node.nodeValue || '').length) {
+                                    hasOutput = true;
+                                    previousWasBreak = false;
+                                }
+                            }
+                        }
+                        parent.replaceChildren(output);
+                    };
+                    flattenBlocks(wrapper);
                     return wrapper.innerHTML;
                 };
 
-                const getClipboardPlainText = () => this.getText();
+                // RangeでDOMを直接挿入する。execCommand('insertHTML')はブラウザの
+                // styleWithCSS状態によりB/STRONGや文字色をspanへ変換・欠落させるため使わない。
+                const insertClipboardHtml = (html) => {
+                    const holder = document.createElement('div');
+                    holder.innerHTML = html || '';
+                    const fragment = document.createDocumentFragment();
+                    while (holder.firstChild) fragment.appendChild(holder.firstChild);
+
+                    const caretColor = this.activeInk === 'red' ? '#e11d48'
+                        : this.activeInk === 'orange' ? '#f59e0b' : 'var(--editor-text-color)';
+                    const caretMarker = document.createElement('span');
+                    caretMarker.style.color = caretColor;
+                    caretMarker.style.fontWeight = this.activeBold ? '700' : '400';
+                    caretMarker.textContent = '\u200b';
+                    fragment.appendChild(caretMarker);
+
+                    this.contentInput.focus();
+                    const selection = window.getSelection();
+                    let range;
+                    if (selection && selection.rangeCount && this.contentInput.contains(selection.getRangeAt(0).commonAncestorContainer)) {
+                        range = selection.getRangeAt(0);
+                    } else {
+                        range = document.createRange();
+                        range.selectNodeContents(this.contentInput);
+                        range.collapse(false);
+                    }
+                    range.deleteContents();
+                    range.insertNode(fragment);
+
+                    const caretText = caretMarker.firstChild;
+                    if (caretText) {
+                        caretText.nodeValue = '';
+                        const caretRange = document.createRange();
+                        caretRange.setStart(caretText, 0);
+                        caretRange.collapse(true);
+                        if (selection) {
+                            selection.removeAllRanges();
+                            selection.addRange(caretRange);
+                        }
+                    }
+                    this.normalizeThemeBoundTextColors(this.contentInput);
+                    // Range APIによる挿入はinputイベントを自動発火しないため、
+                    // 通常入力と同じ保存・文字数・検索更新処理を明示的に起動する。
+                    let inputEvent;
+                    try { inputEvent = new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste' }); }
+                    catch (_) { inputEvent = new Event('input', { bubbles: true }); }
+                    this.contentInput.dispatchEvent(inputEvent);
+                };
 
                 this.contentInput.addEventListener('copy', (e) => {
                     const selection = window.getSelection();
-                    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
-
+                    if (!selection || !selection.rangeCount || selection.isCollapsed) return;
                     const range = selection.getRangeAt(0);
                     if (!this.contentInput.contains(range.commonAncestorContainer)) return;
 
-                    const fragment = range.cloneContents();
                     const holder = document.createElement('div');
-                    holder.appendChild(fragment);
+                    holder.appendChild(range.cloneContents());
+                    const safeFragment = sanitizeClipboardHtml(holder.innerHTML, { preserveAppColors: true });
+                    const envelope = document.createElement('div');
+                    envelope.setAttribute('data-typetouch-clipboard', 'v1');
+                    envelope.innerHTML = safeFragment;
+                    const html = envelope.outerHTML;
+                    const plainText = selection.toString();
 
-                    // コピー元のHTMLをサニタイズ。
-                    // app colors / bold は残し、背景と通常色は落とす。
-                    const html = sanitizeClipboardHtml(holder.innerHTML, { preserveAppColors: true });
-                    const text = selection.toString();
-
+                    if (!e.clipboardData) return;
                     e.preventDefault();
-                    e.clipboardData.setData('text/plain', text);
-                    e.clipboardData.setData('text/html', html);
-
-                    // Type-Touch同士の貼り付けでのみ「アプリで付けた色」を確実に復元。
-                    try {
-                        e.clipboardData.setData(
-                            'application/x-typetouch-html',
-                            sanitizeClipboardHtml(holder.innerHTML, { preserveAppColors: true })
-                        );
-                    } catch (_) {}
+                    try { e.clipboardData.setData('text/plain', plainText); } catch (_) {}
+                    try { e.clipboardData.setData('text/html', html); } catch (_) {}
+                    try { e.clipboardData.setData('application/x-typetouch-html', html); } catch (_) {}
                 });
 
                 this.contentInput.addEventListener('paste', (e) => {
-                    if (this.isViewMode) return;
-
+                    if (this.isViewMode || !e.clipboardData) return;
                     const dt = e.clipboardData;
-                    if (!dt) return;
-
                     let html = '';
                     let isTypeTouchClipboard = false;
+                    let plainText = '';
 
                     try {
                         html = dt.getData('application/x-typetouch-html');
                         isTypeTouchClipboard = !!html;
                     } catch (_) {}
-
                     if (!html) {
-                        html = dt.getData('text/html');
+                        try { html = dt.getData('text/html'); } catch (_) {}
+                    }
+                    try { plainText = dt.getData('text/plain') || ''; } catch (_) {}
+
+                    if (html) {
+                        const envelope = document.createElement('div');
+                        envelope.innerHTML = html;
+                        const marked = envelope.querySelector('[data-typetouch-clipboard="v1"]');
+                        if (marked) {
+                            html = marked.innerHTML;
+                            isTypeTouchClipboard = true;
+                        }
+                        const safeHtml = sanitizeClipboardHtml(html, {
+                            preserveAppColors: isTypeTouchClipboard
+                        });
+                        if (safeHtml.trim()) {
+                            e.preventDefault();
+                            this.contentInput.focus();
+                            insertClipboardHtml(safeHtml);
+                            return;
+                        }
+                        if (!plainText) {
+                            // 画像やスクリプト等、許可されない要素だけのHTMLは挿入しない。
+                            e.preventDefault();
+                            return;
+                        }
                     }
 
-                    // HTMLがない場合はブラウザ標準のプレーンテキスト貼り付けに任せる。
-                    if (!html) return;
-
-                    // 外部からのHTMLは色をすべて捨てる。
-                    // Type-Touch専用MIMEだけ、アプリで付けた赤/オレンジを復元する。
-                    const safeHtml = sanitizeClipboardHtml(html, {
-                        preserveAppColors: isTypeTouchClipboard
-                    });
-
-                    e.preventDefault();
-                    this.contentInput.focus();
-                    document.execCommand('insertHTML', false, safeHtml);
+                    // HTMLがない場合や空の場合は、プレーンテキストを安全に挿入する。
+                    if (plainText) {
+                        e.preventDefault();
+                        this.contentInput.focus();
+                        let escaped = this.escapeHtml(plainText).replace(/\r\n|\r|\n/g, '<br>');
+                        // プレーンテキスト貼り付けは、貼り付け元の色を持ち込まず、
+                        // 現在ツールバーで明示選択している装飾だけを適用する。
+                        const pasteInk = this.activeInk === 'red' ? '#e11d48'
+                            : this.activeInk === 'orange' ? '#f59e0b' : '';
+                        if (pasteInk) escaped = `<span style=\"color:${pasteInk}\">${escaped}</span>`;
+                        if (this.activeBold) escaped = `<strong>${escaped}</strong>`;
+                        insertClipboardHtml(escaped);
+                    }
                 });
 
+                // IME変換中はブラウザ標準のcontenteditable書式状態を使用する。
+                // 空のspanへIMEを挿入する独自処理は、ブラウザによって変換文字列を
+                // span外へ出したり、装飾を消したりするため行わない。
+                // compositionstart直前にツールバーで指定された書式をキャレットへ設定する。
+                this.contentInput.addEventListener('compositionstart', () => {
+                    if (this.isViewMode) return;
+                    const selection = window.getSelection();
+                    if (selection && selection.rangeCount && selection.isCollapsed &&
+                        this.contentInput.contains(selection.anchorNode)) {
+                        this.restoreActiveFormattingAtCaret();
+                    }
+                });
+
+                // Backspace / Delete 後は、ブラウザがキャレット書式を解除する場合があるため、
+                // 削除後にツールバーの指定状態を復元する。カーソル移動先の文字からは取得しない。
+                let restoreFormattingAfterDelete = false;
+                this.contentInput.addEventListener('beforeinput', (e) => {
+                    if (e.inputType && /^delete/.test(e.inputType)) {
+                        restoreFormattingAfterDelete = true;
+                    }
+                });
                 this.contentInput.addEventListener('input', () => {
+                    if (!restoreFormattingAfterDelete) return;
+                    restoreFormattingAfterDelete = false;
+                    this.restoreActiveFormattingAtCaret();
+                    requestAnimationFrame(() => {
+                        if (document.activeElement === this.contentInput) {
+                            this.restoreActiveFormattingAtCaret();
+                        }
+                    });
+                });
+
+                this.contentInput.addEventListener('input', (inputEvent) => {
+                    // 通常文字色のインライン固定を除去し、テーマ変数から表示させる。
+                    // IME変換中のDOMは確定前に触らない。
+                    if (!inputEvent.isComposing) this.normalizeThemeBoundTextColors(this.contentInput);
                     // 実本文が完全に空なら、空要素と過去の改行状態も破棄する。
                     if (this.getText() === '') {
                         this.explicitLineBreaks = 0;
@@ -3400,8 +3620,13 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                     this.scheduleSearchHighlightRefresh();
                 });
 
-                // IME確定時にも必ずカウンタを即時更新。
-                this.contentInput.addEventListener('compositionend', updateRealtimeCounts);
+                // IME確定時は変換DOMが確定した後に通常文字色をテーマ追従へ戻す。
+                this.contentInput.addEventListener('compositionend', () => {
+                    requestAnimationFrame(() => {
+                        this.normalizeThemeBoundTextColors(this.contentInput);
+                        updateRealtimeCounts();
+                    });
+                });
                 this.contentInput.addEventListener('keyup', (e) => {
                     if (e.key === 'Enter' || e.key === 'Backspace' || e.key === 'Delete') {
                         updateRealtimeCounts();
@@ -3432,8 +3657,21 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                     const isComposing = e.isComposing || e.key === 'Process';
 
                     if (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter') {
-                        // タイトルは改行不可。無音で無視する。
+                        // IME変換中のEnterは候補確定に使うため、本文へ移動させない。
+                        if (isComposing || e.keyCode === 229 || e.which === 229) return;
+
+                        // タイトル欄では改行せず、本文の先頭へカーソルを移動する。
                         e.preventDefault();
+                        this.audio.playReturnBell();
+                        this.contentInput.focus();
+                        const selection = window.getSelection();
+                        if (selection) {
+                            const range = document.createRange();
+                            range.selectNodeContents(this.contentInput);
+                            range.collapse(true);
+                            selection.removeAllRanges();
+                            selection.addRange(range);
+                        }
                         return;
                     }
                     // IME変換中は常に鳴らす / 通常は消せるときだけ
@@ -3485,29 +3723,8 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                 // 初回レイアウト確定後に高さ合わせ
                 requestAnimationFrame(() => this.syncEditorHeight());
 
-                // 削除直後はブラウザがキャレットの書式状態をリセットすることがある。
-                // beforeinput で削除操作を記録し、実際のDOM更新後(input)にアクティブ書式を復元する。
-                // keydown の setTimeout だけに依存すると、ブラウザによっては復元前後の順序が不安定になる。
-                let restoreFormattingAfterDelete = false;
-                this.contentInput.addEventListener('beforeinput', (e) => {
-                    // 黒字・太字OFFも「明示的な書式状態」。装飾ボタンがOFFでも
-                    // 削除位置に残った span の書式が次の入力へ漏れるため、すべての削除で復元する。
-                    if (e.inputType && /^delete/.test(e.inputType)) {
-                        restoreFormattingAfterDelete = true;
-                    }
-                });
-                this.contentInput.addEventListener('input', () => {
-                    if (!restoreFormattingAfterDelete) return;
-                    restoreFormattingAfterDelete = false;
-                    // input イベント時点で削除後のキャレット位置が確定している。
-                    // ブラウザが入力後に選択範囲を作り直すことがあるので、次フレームでも再適用。
-                    this.restoreActiveFormattingAtCaret();
-                    requestAnimationFrame(() => {
-                        if (document.activeElement === this.contentInput) {
-                            this.restoreActiveFormattingAtCaret();
-                        }
-                    });
-                });
+                // activeInk / activeBold はツールバーで明示的に選択された状態のみを保持する。
+                // カーソル移動先の既存文字から書式を読み取って状態を切り替えることはしない。
 
                 // Keypress Audio Feedback with smart Delete / Arrow handling
                 const ignoredKeys = [
@@ -3531,9 +3748,8 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                     const value = this.getText();
                     const isComposing = e.isComposing || e.key === 'Process';
 
-                    // 入力前にも選択中の書式をキャレットへ適用する。
-                    // 色だけでなく太字も毎回確認し、Delete後にブラウザが書式状態を解除しても
-                    // 次の入力文字が選択中のエフェクトで挿入されるようにする。
+                    // 通常入力の直前に、ツールバーで指定された書式をキャレットへ設定する。
+                    // カーソル移動先の既存文字の書式は参照せず、選択中の設定を優先する。
                     if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && !isComposing) {
                         this.restoreActiveFormattingAtCaret();
                     }
@@ -3572,13 +3788,6 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                         } else if (!isComposing && hasSelection) {
                             this.explicitLineBreaks = Math.max(0, this.explicitLineBreaks - (value.slice(start, end).match(/\n/g) || []).length);
                         }
-                        if (!isComposing) {
-                            requestAnimationFrame(() => {
-                                if (document.activeElement === this.contentInput) {
-                                    this.restoreActiveFormattingAtCaret();
-                                }
-                            });
-                        }
                         return;
                     }
 
@@ -3592,25 +3801,12 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                         } else if (!isComposing && hasSelection) {
                             this.explicitLineBreaks = Math.max(0, this.explicitLineBreaks - (value.slice(start, end).match(/\n/g) || []).length);
                         }
-
-                        // Delete後にブラウザがキャレット位置の装飾状態を解除する場合があるため、
-                        // 削除処理が終わってから、選択中のインク色・太字を入力状態へ戻す。
-                        if (!isComposing) {
-                            // 装飾ONの場合だけでなく、通常の黒字・太字OFFでも復元する。
-                            // inputイベント側の復元と競合しても、最後に選択中の設定へ揃える。
-                            requestAnimationFrame(() => {
-                                if (document.activeElement === this.contentInput) {
-                                    this.restoreActiveFormattingAtCaret();
-                                }
-                            });
-                        }
                         return;
                     }
 
-                    // Arrow keys
-                    if (e.key === 'ArrowLeft' || e.code === 'ArrowLeft' || e.key === 'ArrowRight' || e.code === 'ArrowRight' || e.key === 'ArrowUp' || e.code === 'ArrowUp' || e.key === 'ArrowDown' || e.code === 'ArrowDown') {
-                        // 実際にカーソル/選択範囲が動いたときだけ鳴らす。境界で動けない場合は無音。
-                        const before = { start, end, hasSelection };
+                    // Arrow keys: カーソル移動ではツールバーの選択状態を一切変更しない。
+                    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+                        const before = { start, end };
                         setTimeout(() => {
                             if (document.activeElement !== this.contentInput) return;
                             const after = this.getSelectionOffsets();
@@ -3724,13 +3920,13 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                         return;
                     }
 
-                    const usable = await this.isAutomaticBackupUsable();
-                    if (usable) {
-                        // 既に保存先が指定済み → その場で同期を更新
-                        await this.syncAutoBackupFile(true, false);
+                    if (this.hasAutomaticBackupConfigured()) {
+                        // 保存先が登録済みなら、クリック直後に保存済みハンドルの
+                        // アクセス許可を再取得する。事前の await でユーザー操作の
+                        // 有効期間を失わないよう、ここで直接呼び出す。
+                        await this.resumeAutomaticBackupPermission();
                     } else {
-                        // 未設定、またはアクセス権が失われている
-                        // → ファイル/フォルダ選択（または権限再確認）を直接開く
+                        // 保存先が未設定の場合だけ、新しい保存先を選択する。
                         await this.setupAutomaticBackup();
                     }
                 });
@@ -3747,6 +3943,11 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                 });
 
                 // 文字色（微薄赤 / 微薄オレンジ）
+                // ツールバーボタン押下で本文の選択範囲・キャレットを失わない。
+                ['ink-red-btn', 'ink-orange-btn', 'ink-clear-btn', 'bold-btn'].forEach((id) => {
+                    document.getElementById(id)?.addEventListener('mousedown', (e) => e.preventDefault());
+                });
+
                 document.getElementById('ink-red-btn').addEventListener('click', () => {
                     if (this.isViewMode) return;
                     this.audio.playPenClick();
@@ -3925,6 +4126,12 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                 document.getElementById('typewriter-sync-btn')?.addEventListener('click', () => this.syncAutoBackupFile(false, false));
                 document.getElementById('typewriter-manual-backup-btn')?.addEventListener('click', () => this.exportAllData());
 
+                // Print current document using the browser's native print dialog.
+                document.getElementById('print-btn').addEventListener('click', () => {
+                    this.audio.playToolbarClick();
+                    window.print();
+                });
+
                 // Copy to clipboard
                 document.getElementById('copy-btn').addEventListener('click', () => {
                     this.audio.playToolbarClick();
@@ -4076,6 +4283,8 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
             setDarkMode(enable) {
                 this.isDarkMode = enable;
                 document.body.classList.toggle('dark', enable);
+                // 過去に通常文字へ固定保存された色を解除し、テーマ変数へ追従させる。
+                this.normalizeThemeBoundTextColors(this.contentInput);
                 const browserThemeColor = document.querySelector('meta[name="theme-color"]');
                 if (browserThemeColor) browserThemeColor.setAttribute('content', enable ? '#0c0a12' : '#f7f4ea');
                 document.getElementById('icon-sun').classList.toggle('hidden', !enable);
@@ -4086,6 +4295,8 @@ body:not(.dark) #typewriter-backup-mode-overlay [data-backup-mode="cancel"] { co
                     darkBtn.setAttribute('aria-label', enable ? '通常モードへ' : 'ダークモードへ');
                 }
                 localStorage.setItem('typewriter-dark-mode', enable ? 'true' : 'false');
+                // キャレットが本文内にある場合だけ、現在のツールバー指定を入力状態へ戻す。
+                this.restoreActiveFormattingAtCaret();
                 this.updateSearchHighlights();
                 this.refreshBrandDashboard();
             }
@@ -5398,6 +5609,37 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 }
             }
 
+            async resumeAutomaticBackupPermission() {
+                if (!this.hasAutomaticBackupConfigured()) return false;
+
+                const handle = this.backupConfig.backupFileHandle;
+                try {
+                    let permission = 'prompt';
+
+                    // requestPermission() をユーザー操作の有効期間内に呼び出すため、
+                    // queryPermission() の await より先に実行する。
+                    if (typeof handle.requestPermission === 'function') {
+                        permission = await handle.requestPermission({ mode: 'readwrite' });
+                    } else if (typeof handle.queryPermission === 'function') {
+                        permission = await handle.queryPermission({ mode: 'readwrite' });
+                    }
+
+                    if (permission === 'granted') {
+                        this.autoBackupRetryCount = 0;
+                        await this.syncAutoBackupFile(false, true);
+                    } else {
+                        this.autoBackupLastError = '保存先へのアクセス許可が必要です';
+                        await this.updateAutomaticBackupUI();
+                    }
+                    return permission === 'granted';
+                } catch (err) {
+                    this.autoBackupLastError = err?.message || '保存先への再接続に失敗しました';
+                    console.warn('Automatic backup permission resume failed:', err);
+                    await this.updateAutomaticBackupUI();
+                    return false;
+                }
+            }
+
             scheduleAutomaticBackupRetry() {
                 if (!this.hasAutomaticBackupConfigured() || this.autoBackupRetryTimer) return;
                 // 2, 4, 8, 16... seconds, capped at 60 seconds.
@@ -6061,6 +6303,43 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
             }
 
 
+            normalizeThemeBoundTextColors(root = this.contentInput) {
+                if (!root) return;
+                // 旧版が通常文字へ埋め込んだテーマ既定色だけを取り除く。
+                // Type-Touchの赤/オレンジ(#e11d48 / #f59e0b)は対象外。
+                const themeDefaultColors = new Set([
+                    '#2b2927', '#e8e4f0', '#eee8f8', '#f0eafa'
+                ]);
+                const toHex = (value) => {
+                    if (!value) return '';
+                    const v = String(value).trim().toLowerCase().replace(/\s+/g, '');
+                    if (/^#[0-9a-f]{6}$/.test(v)) return v;
+                    if (/^#[0-9a-f]{3}$/.test(v)) {
+                        return '#' + v.slice(1).split('').map(ch => ch + ch).join('');
+                    }
+                    const rgb = v.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/);
+                    if (rgb && (rgb[4] === undefined || Number(rgb[4]) >= 0.99)) {
+                        return '#' + rgb.slice(1, 4).map(n =>
+                            Math.max(0, Math.min(255, Number(n))).toString(16).padStart(2, '0')
+                        ).join('');
+                    }
+                    return '';
+                };
+
+                const elements = [];
+                if (root.nodeType === Node.ELEMENT_NODE) elements.push(root);
+                if (root.querySelectorAll) elements.push(...root.querySelectorAll('[style], [color]'));
+                elements.forEach(el => {
+                    const inlineHex = toHex(el.style?.getPropertyValue('color'));
+                    const attrHex = toHex(el.getAttribute?.('color'));
+                    if (themeDefaultColors.has(inlineHex) || themeDefaultColors.has(attrHex)) {
+                        el.style?.removeProperty('color');
+                        el.removeAttribute?.('color');
+                        if (el.getAttribute && !el.getAttribute('style')) el.removeAttribute('style');
+                    }
+                });
+            }
+
             setText(text) {
                 if (!this.contentInput) return;
                 if (!text) {
@@ -6084,6 +6363,44 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
             setHtml(html) {
                 if (!this.contentInput) return;
                 this.contentInput.innerHTML = html || '';
+                this.normalizeThemeBoundTextColors(this.contentInput);
+            }
+
+            getTypingSelectionOffsets() {
+                // 通常のgetSelectionOffsets()はRange.toString()基準のため、
+                // DIV/Pで構成された複数行ではブロック境界の改行分が欠落する。
+                // 実際のTextノード位置を、検索・編集と共通の論理オフセットへ変換する。
+                const selection = window.getSelection();
+                if (!selection || !selection.rangeCount || !this.contentInput.contains(selection.anchorNode)) {
+                    return { start: 0, end: 0, hasSelection: false };
+                }
+                const map = this.buildSearchTextMap();
+                const pointOffset = (node, offset) => {
+                    if (node && node.nodeType === Node.TEXT_NODE) {
+                        const segment = map.segments.find(item => item.node === node);
+                        if (segment) return segment.start + Math.max(0, Math.min(offset, node.length));
+                    }
+                    // 空行やDIV/Pの境界ではselection endpointが要素ノードになる。
+                    // 各実テキスト区間とのDOM上の前後関係から論理位置を求める。
+                    for (const segment of map.segments) {
+                        try {
+                            const segmentRange = document.createRange();
+                            segmentRange.setStart(segment.node, 0);
+                            segmentRange.setEnd(segment.node, segment.node.length);
+                            const relation = segmentRange.comparePoint(node, offset);
+                            if (relation < 0) return segment.start;
+                            if (relation === 0) return segment.start;
+                        } catch (_) {}
+                    }
+                    return map.text.length;
+                };
+                const range = selection.getRangeAt(0);
+                const start = pointOffset(range.startContainer, range.startOffset);
+                const end = pointOffset(range.endContainer, range.endOffset);
+                if (start != null && end != null) {
+                    return { start, end, hasSelection: start !== end };
+                }
+                return this.getSelectionOffsets();
             }
 
             getSelectionOffsets() {
@@ -6135,35 +6452,75 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
             }
 
 
-            applyInkToSelectionOrCaret(colorCss) {
-                this.contentInput.focus();
+            // ツールバー操作で本文へフォーカスを戻す際、長文編集中の
+            // ページ・本文スクロール位置をブラウザに変更させない。
+            preserveEditorViewport(callback) {
+                const scrollPositions = [];
+                let element = this.contentInput;
+                while (element && element.nodeType === 1) {
+                    scrollPositions.push({
+                        element,
+                        left: element.scrollLeft,
+                        top: element.scrollTop
+                    });
+                    element = element.parentElement;
+                }
+                const windowX = window.scrollX;
+                const windowY = window.scrollY;
+                const restore = () => {
+                    // 外側のスクロール領域から先に復元する。
+                    for (let i = scrollPositions.length - 1; i >= 0; i--) {
+                        const item = scrollPositions[i];
+                        if (!item.element.isConnected) continue;
+                        if (item.element.scrollLeft !== item.left) item.element.scrollLeft = item.left;
+                        if (item.element.scrollTop !== item.top) item.element.scrollTop = item.top;
+                    }
+                    if (window.scrollX !== windowX || window.scrollY !== windowY) {
+                        window.scrollTo(windowX, windowY);
+                    }
+                };
+
                 try {
-                    document.execCommand('styleWithCSS', false, true);
-                } catch (_) {}
-                if (colorCss) {
-                    document.execCommand('foreColor', false, colorCss);
-                } else {
-                    // 標準色へ戻す。removeFormat は太字など別の装飾まで消してしまうため使わない。
-                    document.execCommand('foreColor', false, this.isDarkMode ? '#e8e4f0' : '#2b2927');
+                    return callback();
+                } finally {
+                    restore();
+                    // focus/execCommand後のブラウザ既定スクロールも抑止する。
+                    requestAnimationFrame(restore);
                 }
             }
 
-            resetOneShotTypingFormatAtSelectionEnd() {
-                // 選択文字への一回限りの装飾後、選択末尾へキャレットを移し、
-                // 次に入力する文字には装飾を引き継がせない。
-                const selection = window.getSelection();
-                if (!selection || !selection.rangeCount) return;
-                const range = selection.getRangeAt(0).cloneRange();
-                range.collapse(false);
-                selection.removeAllRanges();
-                selection.addRange(range);
+            focusEditorWithoutScroll() {
+                if (!this.contentInput || document.activeElement === this.contentInput) return;
                 try {
-                    document.execCommand('styleWithCSS', false, true);
-                    document.execCommand('foreColor', false, this.isDarkMode ? '#e8e4f0' : '#2b2927');
-                    if (document.queryCommandState('bold')) {
-                        document.execCommand('bold', false, null);
+                    this.contentInput.focus({ preventScroll: true });
+                } catch (_) {
+                    // preventScroll非対応環境では、通常focusによるジャンプを避けるため
+                    // 既に本文内に選択範囲がある場合はフォーカスを奪い直さない。
+                    const selection = window.getSelection();
+                    const selectionInsideEditor = !!(
+                        selection && selection.rangeCount &&
+                        this.contentInput.contains(selection.getRangeAt(0).commonAncestorContainer)
+                    );
+                    if (!selectionInsideEditor) this.contentInput.focus();
+                }
+            }
+
+            applyInkToSelectionOrCaret(colorCss) {
+                return this.preserveEditorViewport(() => {
+                    const selection = window.getSelection();
+                    const selectionInsideEditor = !!(
+                        selection && selection.rangeCount &&
+                        this.contentInput.contains(selection.getRangeAt(0).commonAncestorContainer)
+                    );
+                    // mousedown preventDefaultで本文の選択・キャレットが保持されている場合、
+                    // focus()を呼び直さない。必要な場合もpreventScrollでフォーカスする。
+                    if (!selectionInsideEditor || document.activeElement !== this.contentInput) {
+                        this.focusEditorWithoutScroll();
                     }
-                } catch (_) {}
+                    try { document.execCommand('styleWithCSS', false, true); } catch (_) {}
+                    const intendedColor = colorCss || (this.isDarkMode ? '#e8e4f0' : '#2b2927');
+                    document.execCommand('foreColor', false, intendedColor);
+                });
             }
 
             setActiveInk(ink) {
@@ -6175,19 +6532,20 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 const map = { red: '#e11d48', orange: '#f59e0b' };
 
                 if (hasSelectedText) {
-                    // 選択中の文字への装飾は一回限り。入力用の色状態・ボタン状態は保持しない。
-                    this.activeInk = null;
-                    document.getElementById('ink-red-btn').classList.remove('active-ink');
-                    document.getElementById('ink-orange-btn').classList.remove('active-ink');
+                    // 選択文字への適用は一回限り。入力用の選択状態は変更しない。
                     this.applyInkToSelectionOrCaret(map[ink]);
-                    this.resetOneShotTypingFormatAtSelectionEnd();
+                    const range = window.getSelection().getRangeAt(0).cloneRange();
+                    range.collapse(false);
+                    window.getSelection().removeAllRanges();
+                    window.getSelection().addRange(range);
+                    this.restoreActiveFormattingAtCaret();
                     return;
                 }
 
-                // キャレット位置で使った場合のみ、以降の入力用として色を保持する。
-                this.activeInk = (this.activeInk === ink) ? null : ink;
-                document.getElementById('ink-red-btn').classList.toggle('active-ink', this.activeInk === 'red');
-                document.getElementById('ink-orange-btn').classList.toggle('active-ink', this.activeInk === 'orange');
+                // カーソル位置ではツールバーの明示的な選択状態だけを更新。
+                this.activeInk = this.activeInk === ink ? null : ink;
+                document.getElementById('ink-red-btn')?.classList.toggle('active-ink', this.activeInk === 'red');
+                document.getElementById('ink-orange-btn')?.classList.toggle('active-ink', this.activeInk === 'orange');
                 this.applyInkToSelectionOrCaret(this.activeInk ? map[this.activeInk] : null);
             }
 
@@ -6200,64 +6558,40 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 const btn = document.getElementById('bold-btn');
 
                 if (hasSelectedText) {
-                    // 選択中の文字だけ太字を切り替え、次の入力に向けた状態は残さない。
-                    this.activeBold = false;
-                    if (btn) btn.classList.remove('active-ink');
+                    // 選択文字だけを太字化し、選択末尾の入力状態はツールバー設定へ戻す。
                     this.contentInput.focus();
-                    try {
-                        document.execCommand('styleWithCSS', false, true);
-                    } catch (_) {}
+                    try { document.execCommand('styleWithCSS', false, true); } catch (_) {}
                     document.execCommand('bold', false, null);
-                    this.resetOneShotTypingFormatAtSelectionEnd();
+                    const range = window.getSelection().getRangeAt(0).cloneRange();
+                    range.collapse(false);
+                    window.getSelection().removeAllRanges();
+                    window.getSelection().addRange(range);
+                    this.restoreActiveFormattingAtCaret();
                     return;
                 }
 
-                // キャレット位置で使った場合は、従来どおり入力用の太字状態をトグルする。
                 this.activeBold = !this.activeBold;
                 if (btn) btn.classList.toggle('active-ink', this.activeBold);
-
                 this.contentInput.focus();
-                try {
-                    document.execCommand('styleWithCSS', false, true);
-                } catch (_) {}
-                document.execCommand('bold', false, null);
-
-                const isBold = document.queryCommandState('bold');
-                if (this.activeBold !== isBold) {
-                    document.execCommand('bold', false, null);
-                }
+                try { document.execCommand('styleWithCSS', false, true); } catch (_) {}
+                const currentBold = document.queryCommandState('bold');
+                if (currentBold !== this.activeBold) document.execCommand('bold', false, null);
             }
 
             restoreActiveFormattingAtCaret() {
                 if (this.isViewMode || !this.contentInput) return;
-                // 削除後のキャレットに適用する。選択範囲が残っていたら触らない。
                 const selection = window.getSelection();
-                if (selection && !selection.isCollapsed) return;
-                // 全文をDeleteした場合など、ブラウザが削除済みノード上に
-                // キャレットを残すことがある。その場合は本文末尾へ置き直す。
-                if (!selection || !this.contentInput.contains(selection.anchorNode)) {
-                    this.contentInput.focus();
-                    const range = document.createRange();
-                    range.selectNodeContents(this.contentInput);
-                    range.collapse(false);
-                    const currentSelection = window.getSelection();
-                    currentSelection.removeAllRanges();
-                    currentSelection.addRange(range);
-                }
+                if (!selection || !selection.rangeCount || !selection.isCollapsed) return;
+                if (!this.contentInput.contains(selection.anchorNode)) return;
 
-                this.contentInput.focus();
                 try {
                     document.execCommand('styleWithCSS', false, true);
                     const colors = { red: '#e11d48', orange: '#f59e0b' };
-                    // 色が未選択 (activeInk === null) の場合も標準色を明示的に設定する。
-                    // これを省くと、削除後に赤/オレンジの span 内へキャレットが残り、
-                    // 通常の黒字で入力したつもりでも直前の色が引き継がれてしまう。
                     const intendedColor = this.activeInk && colors[this.activeInk]
                         ? colors[this.activeInk]
                         : (this.isDarkMode ? '#e8e4f0' : '#2b2927');
                     document.execCommand('foreColor', false, intendedColor);
 
-                    // 太字は選択中の状態に合わせる。黒字へ戻すときも太字設定は壊さない。
                     const shouldBeBold = !!this.activeBold;
                     if (document.queryCommandState('bold') !== shouldBeBold) {
                         document.execCommand('bold', false, null);
