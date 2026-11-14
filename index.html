@@ -2676,6 +2676,28 @@ body.dark #delete-doc-btn:hover > svg {
          * - In-document Search with Highlights
          */
 
+        // localStorage が利用できない環境（file://、プライベート設定、
+        // ブラウザのストレージ制限など）でもアプリ全体の初期化を止めない。
+        function safeStorageGetItem(key, fallback = null) {
+            try {
+                const value = window.localStorage.getItem(key);
+                return value === null ? fallback : value;
+            } catch (error) {
+                console.warn('localStorage read unavailable:', key, error);
+                return fallback;
+            }
+        }
+
+        function safeStorageSetItem(key, value) {
+            try {
+                window.localStorage.setItem(key, String(value));
+                return true;
+            } catch (error) {
+                console.warn('localStorage write unavailable:', key, error);
+                return false;
+            }
+        }
+
         // ==========================================
         // 1. IndexedDB Controller
         // ==========================================
@@ -2684,9 +2706,114 @@ body.dark #delete-doc-btn:hover > svg {
         const STORE_NAME = 'documents';
         const BACKUP_STORE_NAME = 'backupConfig';
 
+        // contentHtml を唯一の本文データとして扱うための共通変換処理。
+        // HTMLからのテキスト抽出ではブロック境界とBRを改行として保持する。
+        function htmlToDocumentText(html) {
+            // 一時DOMを使い、エディター本体の getText() と同じ規則で本文を抽出する。
+            // これにより、空行・末尾改行・contenteditable の DIV/BR 構造で
+            // 一覧の文字数や本文検索と、編集画面の本文が食い違わない。
+            const el = document.createElement('div');
+            el.innerHTML = String(html ?? '');
+
+            const hasRealText = Array.from(el.querySelectorAll('*')).some(node => {
+                if (node.tagName === 'BR') return false;
+                return Array.from(node.childNodes || []).some(child =>
+                    child.nodeType === Node.TEXT_NODE &&
+                    (child.nodeValue || '').replace(/\u00a0/g, ' ').length > 0
+                );
+            }) || Array.from(el.childNodes).some(node =>
+                node.nodeType === Node.TEXT_NODE &&
+                (node.nodeValue || '').replace(/\u00a0/g, ' ').length > 0
+            );
+
+            // 空の DIV/BR はブラウザーが contenteditable に残す表示用構造。
+            // エディター側 getText() と同じく、実文字がなければ空本文として扱う。
+            if (!hasRealText) return '';
+
+            const readInline = node => {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    return (node.nodeValue || '').replace(/\u00a0/g, ' ');
+                }
+                if (node.nodeType !== Node.ELEMENT_NODE) return '';
+                if (node.tagName === 'BR') return '\n';
+                let value = '';
+                for (const child of node.childNodes) value += readInline(child);
+                return value;
+            };
+
+            const lines = [];
+            let inline = '';
+            let hasInline = false;
+            const flushInline = () => {
+                if (hasInline || inline !== '') {
+                    lines.push(inline);
+                    inline = '';
+                    hasInline = false;
+                }
+            };
+
+            for (const node of el.childNodes) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    inline += (node.nodeValue || '').replace(/\u00a0/g, ' ');
+                    hasInline = true;
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    if (node.tagName === 'BR') {
+                        inline += '\n';
+                        hasInline = true;
+                    } else if (node.tagName === 'DIV' || node.tagName === 'P') {
+                        flushInline();
+                        const onlyBr = node.childNodes.length === 0 ||
+                            (node.childNodes.length === 1 && node.firstChild.nodeName === 'BR');
+                        if (onlyBr) {
+                            lines.push('');
+                        } else {
+                            lines.push(readInline(node).replace(/\n$/, ''));
+                        }
+                    } else {
+                        inline += readInline(node);
+                        hasInline = true;
+                    }
+                }
+            }
+            flushInline();
+            return lines.length ? lines.join('\n') : '';
+        }
+
+        function plainTextToDocumentHtml(value) {
+            const normalized = String(value ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            if (normalized === '') return '';
+            return normalized.split('\n')
+                .map(line => line === '' ? '<div><br></div>' : `<div>${String(line).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]))}</div>`)
+                .join('');
+        }
+
+        function normalizeDocumentRecord(doc, defaults = {}) {
+            const source = doc && typeof doc === 'object' ? doc : {};
+            // 旧版は contentHtml を空文字で保存しつつ content に本文を持つ場合がある。
+            // 元の openDocument() と同じく、contentHtml が空で旧 content が存在するときだけ
+            // 旧本文をHTMLへ変換する。非空の contentHtml は常に正とする。
+            const hasUsableHtml = Object.prototype.hasOwnProperty.call(source, 'contentHtml') &&
+                source.contentHtml !== null && source.contentHtml !== undefined &&
+                String(source.contentHtml) !== '';
+            const legacyText = source.content ?? '';
+            const contentHtml = hasUsableHtml
+                ? String(source.contentHtml)
+                : (String(legacyText) !== '' ? plainTextToDocumentHtml(legacyText) : '');
+            const text = htmlToDocumentText(contentHtml);
+            return {
+                id: source.id || defaults.id || ('doc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
+                title: source.title || '無題の文書',
+                contentHtml,
+                createdAt: source.createdAt || defaults.createdAt || new Date().toISOString(),
+                updatedAt: defaults.updatedAt || source.updatedAt || new Date().toISOString(),
+                charCount: text.length
+            };
+        }
+
         class DocumentDB {
             constructor() {
                 this.db = null;
+                this.migrationPromise = Promise.resolve(true);
             }
 
             async init() {
@@ -2700,6 +2827,16 @@ body.dark #delete-doc-btn:hover > svg {
 
                     request.onsuccess = (event) => {
                         this.db = event.target.result;
+
+                        // DB接続の確立と既存データ移行を分離する。
+                        // 移行処理の失敗・遅延で start() が止まり、bindEvents() が
+                        // 実行されず全ボタンが無反応になる状態を防ぐ。
+                        this.migrationPromise = this.migrateLegacyDocuments().catch(error => {
+                            console.error('Legacy document migration failed:', error);
+                            return false;
+                        });
+
+                        // UIイベントを登録できるよう、接続確立時点で初期化を続行する。
                         resolve(this.db);
                     };
 
@@ -2717,6 +2854,33 @@ body.dark #delete-doc-btn:hover > svg {
                 });
             }
 
+            async migrateLegacyDocuments() {
+                if (!this.db) throw new Error('DB未初期化');
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction([STORE_NAME], 'readwrite');
+                    const store = tx.objectStore(STORE_NAME);
+                    const request = store.openCursor();
+                    request.onsuccess = event => {
+                        const cursor = event.target.result;
+                        if (!cursor) return;
+                        const oldRecord = cursor.value;
+                        const normalized = normalizeDocumentRecord(oldRecord, {
+                            id: oldRecord.id,
+                            createdAt: oldRecord.createdAt,
+                            updatedAt: oldRecord.updatedAt
+                        });
+                        const needsUpdate = Object.prototype.hasOwnProperty.call(oldRecord, 'content') ||
+                            !Object.prototype.hasOwnProperty.call(oldRecord, 'contentHtml') ||
+                            oldRecord.charCount !== normalized.charCount;
+                        if (needsUpdate) cursor.update(normalized);
+                        cursor.continue();
+                    };
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = event => reject(event.target.error || new Error('既存文書の移行に失敗しました'));
+                    tx.onabort = event => reject(event.target.error || new Error('既存文書の移行が中断されました'));
+                });
+            }
+
             async saveDoc(doc) {
                 return new Promise((resolve, reject) => {
                     if (!this.db) return reject('DB未初期化');
@@ -2724,15 +2888,10 @@ body.dark #delete-doc-btn:hover > svg {
                     const transaction = this.db.transaction([STORE_NAME], 'readwrite');
                     const store = transaction.objectStore(STORE_NAME);
 
-                    const record = {
+                    const record = normalizeDocumentRecord(doc, {
                         id: doc.id || 'doc_' + Date.now(),
-                        title: doc.title || '無題の文書',
-                        content: doc.content || '',
-                        contentHtml: doc.contentHtml || '',
-                        createdAt: doc.createdAt || new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                        charCount: doc.content ? doc.content.length : 0
-                    };
+                        updatedAt: new Date().toISOString()
+                    });
 
                     const request = store.put(record);
 
@@ -2820,15 +2979,7 @@ body.dark #delete-doc-btn:hover > svg {
                     transaction.onabort = (e) => reject(e.target.error || new Error('文書の復元が中断されました'));
                     store.clear();
                     for (const doc of docs) {
-                        const record = {
-                            id: doc.id || ('doc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
-                            title: doc.title || '無題の文書',
-                            content: doc.content || '',
-                            contentHtml: doc.contentHtml || '',
-                            createdAt: doc.createdAt || new Date().toISOString(),
-                            updatedAt: doc.updatedAt || new Date().toISOString(),
-                            charCount: doc.content ? doc.content.length : (doc.charCount || 0)
-                        };
+                        const record = normalizeDocumentRecord(doc);
                         store.put(record);
                         count++;
                     }
@@ -2848,15 +2999,7 @@ body.dark #delete-doc-btn:hover > svg {
                     transaction.oncomplete = () => resolve(count);
                     transaction.onerror = (e) => reject(e.target.error);
                     for (const doc of docs) {
-                        const record = {
-                            id: doc.id || ('doc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
-                            title: doc.title || '無題の文書',
-                            content: doc.content || '',
-                            contentHtml: doc.contentHtml || '',
-                            createdAt: doc.createdAt || new Date().toISOString(),
-                            updatedAt: doc.updatedAt || new Date().toISOString(),
-                            charCount: doc.content ? doc.content.length : (doc.charCount || 0)
-                        };
+                        const record = normalizeDocumentRecord(doc);
                         store.put(record);
                         count++;
                     }
@@ -2870,12 +3013,12 @@ body.dark #delete-doc-btn:hover > svg {
         class TypewriterAudio {
             constructor() {
                 this.ctx = null;
-                this.enabled = localStorage.getItem('typewriter-sound-enabled') !== 'false';
+                this.enabled = safeStorageGetItem('typewriter-sound-enabled') !== 'false';
             }
 
             setEnabled(enabled) {
                 this.enabled = !!enabled;
-                localStorage.setItem('typewriter-sound-enabled', this.enabled ? 'true' : 'false');
+                safeStorageSetItem('typewriter-sound-enabled', this.enabled ? 'true' : 'false');
             }
 
             init() {
@@ -3221,19 +3364,28 @@ body.dark #delete-doc-btn:hover > svg {
             async start() {
                 try {
                     // Restore dark mode preference
-                    const savedDark = localStorage.getItem('typewriter-dark-mode');
+                    const savedDark = safeStorageGetItem('typewriter-dark-mode');
                     if (savedDark === 'true') {
                         this.setDarkMode(true);
                     }
 
+                    // DB接続より先にUIイベントを登録する。
+                    // localStorage / IndexedDB が利用できない環境でも、
+                    // 検索・テーマ切替・表示切替などのUI操作まで全停止しない。
+                    this.bindEvents();
+
                     await this.db.init();
+
+                    // 移行は失敗してもアプリ全体を停止させない。
+                    // Promise側でエラーを処理済みなので、ここでは完了だけ待つ。
+                    await this.db.migrationPromise;
+
                     try {
                         const savedBackupConfig = await this.db.getBackupConfig();
                         if (savedBackupConfig) this.backupConfig = { ...this.backupConfig, ...savedBackupConfig };
                     } catch (e) {
                         console.warn('Backup config restore failed:', e);
                     }
-                    this.bindEvents();
                     await this.loadDocumentList();
                     await this.updateAutomaticBackupUI();
 
@@ -3262,7 +3414,7 @@ body.dark #delete-doc-btn:hover > svg {
                     window.addEventListener('pointerdown', resumeSavedBackupOnGesture, { once: true, capture: true });
                     window.addEventListener('keydown', resumeSavedBackupOnGesture, { once: true, capture: true });
 
-                    const savedViewMode = localStorage.getItem('typewriter-view-mode') === 'true';
+                    const savedViewMode = safeStorageGetItem('typewriter-view-mode') === 'true';
                     this.setViewMode(savedViewMode, { silent: true });
 
                     const docs = await this.db.getAllDocs();
@@ -4123,7 +4275,7 @@ body.dark #delete-doc-btn:hover > svg {
                 });
 
                 document.getElementById('typewriter-auto-setup-btn')?.addEventListener('click', () => this.setupAutomaticBackup());
-                document.getElementById('typewriter-sync-btn')?.addEventListener('click', () => this.syncAutoBackupFile(false, false));
+                document.getElementById('typewriter-sync-btn')?.addEventListener('click', () => this.resumeAutomaticBackupPermission());
                 document.getElementById('typewriter-manual-backup-btn')?.addEventListener('click', () => this.exportAllData());
 
                 // Print current document using the browser's native print dialog.
@@ -4294,7 +4446,7 @@ body.dark #delete-doc-btn:hover > svg {
                     darkBtn.title = enable ? '通常モードへ' : 'ダークモードへ';
                     darkBtn.setAttribute('aria-label', enable ? '通常モードへ' : 'ダークモードへ');
                 }
-                localStorage.setItem('typewriter-dark-mode', enable ? 'true' : 'false');
+                safeStorageSetItem('typewriter-dark-mode', enable ? 'true' : 'false');
                 // キャレットが本文内にある場合だけ、現在のツールバー指定を入力状態へ戻す。
                 this.restoreActiveFormattingAtCaret();
                 this.updateSearchHighlights();
@@ -4304,7 +4456,7 @@ body.dark #delete-doc-btn:hover > svg {
             setViewMode(enable, options = {}) {
                 const { silent = false } = options;
                 this.isViewMode = enable;
-                localStorage.setItem('typewriter-view-mode', enable ? 'true' : 'false');
+                safeStorageSetItem('typewriter-view-mode', enable ? 'true' : 'false');
                 const ta = this.contentInput;
                 const title = this.titleInput;
                 const iconEye = document.getElementById('view-mode-icon-eye');
@@ -4504,7 +4656,7 @@ body.dark #delete-doc-btn:hover > svg {
                         <div class="text-[10px] font-mono text-stone-400 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
                             <span>編集: ${updated}</span>
                             <span>作成: ${created}</span>
-                            <span>${(doc.charCount || (doc.content || '').length || 0).toLocaleString()}文字</span>
+                            <span>${(doc.charCount || 0).toLocaleString()}文字</span>
                         </div>
                     `;
                     item.addEventListener('click', () => {
@@ -4514,6 +4666,16 @@ body.dark #delete-doc-btn:hover > svg {
                     });
                     listEl.appendChild(item);
                 });
+            }
+
+            clearSearchTextSelection() {
+                // 本文検索で選択した範囲だけを解除し、本文外の選択は変更しない。
+                const selection = window.getSelection && window.getSelection();
+                if (!selection || selection.isCollapsed || !selection.rangeCount) return;
+                const anchor = selection.anchorNode;
+                const focus = selection.focusNode;
+                const inEditor = node => !!node && (node === this.contentInput || this.contentInput.contains(node));
+                if (inEditor(anchor) || inEditor(focus)) selection.removeAllRanges();
             }
 
             toggleSearchBar(force) {
@@ -4531,6 +4693,7 @@ body.dark #delete-doc-btn:hover > svg {
                     this.currentMatchIndex = -1;
                     this.searchMatchCountEl.textContent = '0件';
                     this.updateSearchHighlights();
+                    this.clearSearchTextSelection();
                     this.contentInput.focus();
                 }
                 setTimeout(() => this.syncEditorHeight(), 280);
@@ -4570,8 +4733,19 @@ body.dark #delete-doc-btn:hover > svg {
                     // 大文字 / 小文字を同一視
                     piece = piece.toLocaleLowerCase('ja-JP');
 
-                    // normalize後に増減した文字も、すべて元の1文字/1コードポイント範囲へ紐付ける
+                    // 空白は連続分を1つにまとめ、検索語・本文の余分な空白を同一視する。
+                    // 圧縮した空白も元本文の範囲へ紐付け、ハイライト位置を維持する。
                     for (const ch of piece) {
+                        if (/\s/u.test(ch)) {
+                            if (normalized[normalized.length - 1] === ' ') {
+                                ends[ends.length - 1] = sourceEnd;
+                                continue;
+                            }
+                            normalized.push(' ');
+                            starts.push(sourceStart);
+                            ends.push(sourceEnd);
+                            continue;
+                        }
                         const units = ch.length;
                         normalized.push(ch);
                         for (let u = 0; u < units; u++) {
@@ -4582,6 +4756,17 @@ body.dark #delete-doc-btn:hover > svg {
                     i = sourceEnd;
                 }
 
+                // 参考方式と同じく前後の空白は検索対象から除外する。
+                while (normalized[0] === ' ') {
+                    normalized.shift();
+                    starts.shift();
+                    ends.shift();
+                }
+                while (normalized[normalized.length - 1] === ' ') {
+                    normalized.pop();
+                    starts.pop();
+                    ends.pop();
+                }
                 return { text: normalized.join(''), starts, ends };
             }
 
@@ -4602,6 +4787,7 @@ body.dark #delete-doc-btn:hover > svg {
                     this.currentMatchIndex = -1;
                     this.searchMatchCountEl.textContent = '0件';
                     this.updateSearchHighlights();
+                    this.clearSearchTextSelection();
                     return;
                 }
 
@@ -5139,7 +5325,6 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
 
             async saveCurrentDocument(manual = false) {
                 const title = this.titleInput.value.trim() || '無題の文書';
-                const content = this.getText();
                 const contentHtml = this.getHtml();
 
                 if (!this.currentDocId) {
@@ -5150,7 +5335,6 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 const doc = {
                     id: this.currentDocId,
                     title: title,
-                    content: content,
                     contentHtml: contentHtml,
                     createdAt: this.createdAt
                 };
@@ -5191,13 +5375,9 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 this.currentDocId = doc.id;
                 this.createdAt = doc.createdAt;
                 this.titleInput.value = doc.title || '';
-                if (doc.contentHtml) {
-                    this.setHtml(doc.contentHtml);
-                } else {
-                    this.setText(doc.content || '');
-                }
-                const storedText = doc.content || '';
-                this.explicitLineBreaks = /^[\n]*$/.test(storedText) ? storedText.length : 0;
+                // 本文はcontentHtmlのみから復元する。旧contentは起動時移行でHTML化済み。
+                this.setHtml(doc.contentHtml || '');
+                this.explicitLineBreaks = 0;
                 
                 const timeStr = new Date(doc.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 this.lastSavedTimeEl.textContent = `保存済み: ${timeStr}`;
@@ -5278,9 +5458,13 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
             filterDocumentList(query) {
                 if (!this.renderedDocs) return;
                 const q = this.normalizeSearchText(query).trim();
-                const filtered = this.renderedDocs.filter(d => 
-                    d.title && this.normalizeSearchText(d.title).includes(q)
-                );
+                const filtered = this.renderedDocs.filter(d => {
+                    const searchable = this.normalizeSearchText([
+                        d.title || '',
+                        htmlToDocumentText(d.contentHtml || '')
+                    ].join(' '));
+                    return searchable.includes(q);
+                });
                 this.renderDocList(filtered);
             }
 
@@ -5622,6 +5806,8 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     // requestPermission() をユーザー操作の有効期間内に呼び出すため、
                     // queryPermission() の await より先に実行する。
                     if (typeof handle.requestPermission === 'function') {
+                        // この関数はユーザー操作から呼び出す。先に await を挟まず
+                        // requestPermission を実行してブラウザのユーザー操作要件を満たす。
                         permission = await handle.requestPermission({ mode: 'readwrite' });
                     } else if (typeof handle.queryPermission === 'function') {
                         permission = await handle.queryPermission({ mode: 'readwrite' });
@@ -5668,9 +5854,13 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
 
                 this.autoBackupSyncInProgress = true;
                 let syncSucceeded = false;
-                await this.updateAutomaticBackupUI();
 
                 try {
+                    // UI更新側の権限確認・DOM処理が失敗しても、同期本体と finally を
+                    // 必ず実行できるよう、同期開始後のUI更新も保護する。
+                    try { await this.updateAutomaticBackupUI(); }
+                    catch (uiError) { console.warn('Automatic backup UI refresh failed:', uiError); }
+
                     const handle = this.backupConfig.backupFileHandle;
                     if (!handle) return false;
 
@@ -5743,7 +5933,8 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     return false;
                 } finally {
                     this.autoBackupSyncInProgress = false;
-                    await this.updateAutomaticBackupUI();
+                    try { await this.updateAutomaticBackupUI(); }
+                    catch (uiError) { console.warn('Automatic backup UI refresh failed:', uiError); }
                     if (this.autoBackupSyncPending) {
                         this.autoBackupSyncPending = false;
                         queueMicrotask(() => this.syncAutoBackupFile(false, true));
