@@ -2776,11 +2776,15 @@ body.dark #delete-doc-btn:hover > svg {
 
             async saveBackupConfig(config) {
                 return new Promise((resolve, reject) => {
-                    if (!this.db) return reject('DB未初期化');
+                    if (!this.db) return reject(new Error('DB未初期化'));
                     const tx = this.db.transaction([BACKUP_STORE_NAME], 'readwrite');
                     const req = tx.objectStore(BACKUP_STORE_NAME).put({ id: 'default', ...config });
-                    req.onsuccess = () => resolve(req.result);
-                    req.onerror = (e) => reject(e.target.error);
+                    let result;
+                    req.onsuccess = () => { result = req.result; };
+                    req.onerror = (e) => reject(e.target.error || new Error('バックアップ設定を保存できませんでした'));
+                    tx.oncomplete = () => resolve(result);
+                    tx.onerror = (e) => reject(e.target.error || new Error('バックアップ設定の保存に失敗しました'));
+                    tx.onabort = (e) => reject(e.target.error || new Error('バックアップ設定の保存が中断されました'));
                 });
             }
 
@@ -3195,6 +3199,7 @@ body.dark #delete-doc-btn:hover > svg {
                 this.autoBackupRetryTimer = null;
                 this.autoBackupRetryCount = 0;
                 this.autoBackupLastError = null;
+                this.autoBackupNeedsReselect = false;
                 this.backupConfig = { backupFileHandle: null, backupFileName: 'type-touch_auto_backup.json', lastBackup: null };
 
                 // Elements
@@ -4114,9 +4119,10 @@ body.dark #delete-doc-btn:hover > svg {
                 });
 
                 document.getElementById('typewriter-auto-setup-btn')?.addEventListener('click', () => {
-                    // 権限が必要な場合はクリック直後に requestPermission() を開始する。
-                    // それ以外は保存先の新規設定・変更画面を開く。
-                    if (this.hasAutomaticBackupConfigured() && this.autoBackupNeedsPermission) {
+                    // 再選択が必要な場合は、クリック直後に保存先ピッカーを直接開く。
+                    if (this.hasAutomaticBackupConfigured() && this.autoBackupNeedsReselect) {
+                        this.setupAutomaticBackup('create');
+                    } else if (this.hasAutomaticBackupConfigured() && this.autoBackupNeedsPermission) {
                         this.resumeAutomaticBackupPermission();
                     } else {
                         this.setupAutomaticBackup();
@@ -5383,25 +5389,33 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
 
             supportsAutomaticBackup() {
                 return this.isTopLevelBrowsingContext()
+                    && window.isSecureContext === true
                     && (typeof window.showOpenFilePicker === 'function'
                         || typeof window.showSaveFilePicker === 'function');
             }
 
             hasAutomaticBackupConfigured() {
-                return this.supportsAutomaticBackup() && !!this.backupConfig.backupFileHandle && typeof this.backupConfig.backupFileHandle.createWritable === 'function';
+                const handle = this.backupConfig?.backupFileHandle;
+                // ピッカーAPIの有無と、IndexedDBに保存済みのハンドルの有無を分離する。
+                // PWAの起動状態によってピッカーAPIが一時的に見えなくても、
+                // 保存済みハンドルそのものを「未設定」と誤判定しない。
+                return !!handle && typeof handle.createWritable === 'function';
             }
 
             async isAutomaticBackupUsable() {
                 if (!this.hasAutomaticBackupConfigured()) return false;
                 try {
                     const handle = this.backupConfig.backupFileHandle;
-                    if (typeof handle.queryPermission !== 'function') return false;
-                    if ((await handle.queryPermission({ mode: 'readwrite' })) !== 'granted') return false;
-                    // 保存先ファイルが削除・移動されていないか確認する。
+                    // PWAでは再起動後に権限状態が prompt に戻ることがある。
+                    // ここでは権限を要求せず、現在の状態を確認するだけにする。
+                    if (typeof handle.queryPermission === 'function') {
+                        const permission = await handle.queryPermission({ mode: 'readwrite' });
+                        if (permission !== 'granted') return false;
+                    }
+                    // 権限がある場合のみ実ファイルを確認する。
                     if (typeof handle.getFile === 'function') await handle.getFile();
                     return true;
                 } catch (e) {
-                    // NotFoundError など、保存先が存在しなくなった場合は未設定扱いにする。
                     return false;
                 }
             }
@@ -5415,6 +5429,48 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     documentCount: docs.length,
                     documents: docs
                 };
+            }
+
+            async writeBackupToWritable(writable) {
+                if (!writable) throw new Error('保存先を開けませんでした');
+                try {
+                    const payload = await this.buildBackupPayload();
+                    await writable.write(JSON.stringify(payload, null, 2));
+                    await writable.close();
+                    this.backupConfig.lastBackup = Date.now();
+                    await this.db.saveBackupConfig(this.backupConfig);
+                    this.autoBackupLastError = null;
+                    this.autoBackupRetryCount = 0;
+                    return payload.documentCount || 0;
+                } catch (err) {
+                    try { await writable.abort?.(); } catch (_) {}
+                    throw err;
+                }
+            }
+
+            async chooseBackupFileWithInput() {
+                // File System Access API非対応PWAでも、通常のファイル選択で復元できる。
+                // この経路は自動同期先の登録ではなく、1回限りの読み込み。
+                return new Promise(resolve => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = '.json,application/json';
+                    input.style.position = 'fixed';
+                    input.style.left = '-10000px';
+                    input.addEventListener('change', async () => {
+                        const file = input.files && input.files[0];
+                        input.remove();
+                        if (!file) { resolve(false); return; }
+                        await this.importAllData(file);
+                        resolve(true);
+                    }, { once: true });
+                    input.addEventListener('cancel', () => {
+                        input.remove();
+                        resolve(false);
+                    }, { once: true });
+                    document.body.appendChild(input);
+                    input.click();
+                });
             }
 
             showAutomaticBackupModeChooser() {
@@ -5472,26 +5528,36 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     return false;
                 }
 
-                if (!this.supportsAutomaticBackup()) {
-                    this.showToast('このブラウザではファイルの自動同期を利用できません');
-                    return false;
-                }
-
                 if (mode !== 'create' && mode !== 'load') {
                     this.showToast('同期方法を選び直してください');
                     await this.updateAutomaticBackupUI();
                     return false;
                 }
 
+                // Secure Context / File System Access APIの非対応環境でも、
+                // 保存は通常ダウンロード、読み込みは通常ファイル選択で実行できるようにする。
+                if (mode === 'create' && typeof window.showSaveFilePicker !== 'function') {
+                    this.showToast('このPWAでは継続的な自動同期に対応していないため、手動バックアップを保存します');
+                    await this.exportAllData();
+                    return false;
+                }
+                if (mode === 'load' && typeof window.showOpenFilePicker !== 'function') {
+                    this.showToast('通常のファイル選択からバックアップを読み込みます');
+                    const imported = await this.chooseBackupFileWithInput();
+                    await this.updateAutomaticBackupUI();
+                    return imported;
+                }
+
                 try {
                     let fileHandle;
                     if (mode === 'create') {
-                        // 現在のローカル文書を、選択した保存先ファイルへ書き出す。
+                        // File System Access APIがないPWAでは、通常のダウンロードへフォールバック。
                         if (typeof window.showSaveFilePicker !== 'function') {
-                            this.showToast('このブラウザでは新しい保存先ファイルを作成できません');
-                            await this.updateAutomaticBackupUI();
+                            this.showToast('このPWAでは継続的な自動同期に対応していないため、手動バックアップを保存します');
+                            await this.exportAllData();
                             return false;
                         }
+
                         fileHandle = await window.showSaveFilePicker({
                             suggestedName: 'type-touch_auto_backup.json',
                             types: [{
@@ -5504,25 +5570,59 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                             return false;
                         }
 
-                        // ファイル選択ダイアログでユーザーが選んだハンドルを先に保存する。
-                        // picker後の非同期処理中に requestPermission() を呼ぶと、
-                        // transient user activation が失われて拒否されるブラウザがある。
-                        // 権限が不足している場合は設定を保持し、画面上の「アクセスを許可」から
-                        // ユーザー操作として改めて権限を要求する。
+                        // 重要：ファイル選択直後、IndexedDB保存やUI更新などのawaitより先に
+                        // createWritable()を呼び出す。PWAではユーザー操作の有効期間を
+                        // 失った後に呼ぶと、権限確認で拒否されることがある。
+                        let writablePromise;
+                        try {
+                            // 直ちに呼び出し、同時に拒否ハンドラーも付けて未処理rejectionを防ぐ。
+                            writablePromise = fileHandle.createWritable().then(
+                                writable => ({ writable }),
+                                error => ({ error })
+                            );
+                        } catch (writeOpenError) {
+                            writablePromise = Promise.resolve({ error: writeOpenError });
+                        }
+
                         this.backupConfig.backupFileHandle = fileHandle;
-                        this.backupConfig.backupFileName = 'type-touch_auto_backup.json';
+                        this.backupConfig.backupFileName = fileHandle.name || 'type-touch_auto_backup.json';
                         this.backupConfig.lastBackup = null;
+                        this.autoBackupNeedsReselect = false;
+
+                        // 書き込み開始と並行してハンドルを永続化し、PWA再起動後も再接続できるようにする。
                         await this.db.saveBackupConfig(this.backupConfig);
-                        const success = await this.syncAutoBackupFile(false, false);
-                        // 一時的な書き込み失敗でも保存先の登録を保持し、再試行できるようにする。
-                        return success;
+
+                        try {
+                            const opened = await writablePromise;
+                            if (opened.error) throw opened.error;
+                            const count = await this.writeBackupToWritable(opened.writable);
+                            this.showToast(`${count}件の文書を自動同期先に保存しました`);
+                            await this.updateAutomaticBackupUI();
+                            return true;
+                        } catch (writeError) {
+                            const permissionError = writeError && (
+                                writeError.name === 'NotAllowedError' ||
+                                writeError.name === 'SecurityError' ||
+                                writeError.name === 'PermissionDeniedError'
+                            );
+                            this.autoBackupLastError = permissionError
+                                ? '保存先への書き込み許可が必要です'
+                                : (writeError?.message || '保存先ファイルを作成できませんでした');
+                            this.autoBackupNeedsReselect = !!permissionError;
+                            this.showToast(permissionError
+                                ? '保存先の書き込みが許可されませんでした。「保存先を再選択」からもう一度ファイルを選んでください。'
+                                : '保存先ファイルを作成できませんでした。別の場所を選んでください。');
+                            await this.updateAutomaticBackupUI();
+                            return false;
+                        }
                     }
 
                     // 既存ファイルを選択して中身を検証し、ローカル文書へ復元する。
                     if (typeof window.showOpenFilePicker !== 'function') {
-                        this.showToast('このブラウザでは既存ファイルの読み込みを利用できません');
+                        this.showToast('このPWAではファイルハンドルの読み込みに対応していないため、通常のファイル選択で復元します');
+                        const imported = await this.chooseBackupFileWithInput();
                         await this.updateAutomaticBackupUI();
-                        return false;
+                        return imported;
                     }
                     const [selectedHandle] = await window.showOpenFilePicker({
                         multiple: false,
@@ -5538,8 +5638,8 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                         return false;
                     }
 
-                    // 読み込みはファイル選択で得た読み取り権限で実施する。
-                    // 書き込み権限が必要な場合は、復元後の「アクセスを許可」操作で取得する。
+                    // 既存バックアップの読み込み・復元には読み取り権限だけを使う。
+                    // 自動同期用の書き込み権限がなくても、読み込み自体は中断しない。
                     const selectedFile = await fileHandle.getFile();
                     const rawText = await selectedFile.text();
                     let parsed;
@@ -5574,16 +5674,40 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     this.backupConfig.backupFileName = fileHandle.name || 'type-touch_auto_backup.json';
                     this.backupConfig.lastBackup = null;
                     await this.db.saveBackupConfig(this.backupConfig);
-                    const success = await this.syncAutoBackupFile(false, false);
-                    // 書き込み権限が未取得なら、保存先を保持して明示的な許可操作を案内する。
-                    return success;
+
+                    // 読み込みと復元はここで完了。読み取り専用の許可しかない場合に
+                    // 書き込み権限エラーで「読み込み自体が失敗した」と誤認させない。
+                    let writePermission = 'prompt';
+                    try {
+                        if (typeof fileHandle.queryPermission === 'function') {
+                            writePermission = await fileHandle.queryPermission({ mode: 'readwrite' });
+                        }
+                    } catch (_) {}
+                    if (writePermission === 'granted') {
+                        await this.syncAutoBackupFile(false, false);
+                    } else {
+                        this.autoBackupLastError = '読み込み完了。自動同期には書き込み許可が必要です';
+                        this.showToast('バックアップを読み込みました。自動同期を使う場合は「アクセスを許可」を押してください。');
+                        await this.updateAutomaticBackupUI();
+                    }
+                    return true;
                 } catch (err) {
-                    if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) {
+                    if (err && err.name === 'AbortError') {
                         await this.updateAutomaticBackupUI();
                         return false;
                     }
                     console.error('Automatic backup setup failed:', err);
-                    this.showToast(err && err.message ? err.message : '自動同期の設定に失敗しました');
+                    const permissionError = err && (
+                        err.name === 'NotAllowedError' ||
+                        err.name === 'SecurityError' ||
+                        err.name === 'PermissionDeniedError'
+                    );
+                    this.autoBackupLastError = permissionError
+                        ? 'ファイル選択またはアクセスがブラウザに拒否されました'
+                        : (err?.message || '自動同期の設定に失敗しました');
+                    this.showToast(permissionError
+                        ? 'PWAからファイルへアクセスできませんでした。アプリをChromeで開き直すか、通常のバックアップ保存・読み込みを利用してください。'
+                        : (err && err.message ? err.message : '自動同期の設定に失敗しました'));
                     await this.updateAutomaticBackupUI();
                     return false;
                 }
@@ -5594,28 +5718,36 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
 
                 const handle = this.backupConfig.backupFileHandle;
                 try {
-                    let permission = 'prompt';
-
-                    // このメソッドは許可ボタンの click ハンドラーから直接呼ぶ。
-                    // 最初の await より前に requestPermission() を開始し、
-                    // ブラウザのユーザー操作要件を満たす。
-                    if (typeof handle.requestPermission === 'function') {
-                        permission = await handle.requestPermission({ mode: 'readwrite' });
-                    } else if (typeof handle.queryPermission === 'function') {
-                        permission = await handle.queryPermission({ mode: 'readwrite' });
+                    // requestPermissionは、このメソッドを直接呼び出すクリック操作の中で
+                    // 最初のawaitより前に実行する。
+                    if (typeof handle.requestPermission !== 'function') {
+                        // requestPermission非対応の実装では、保存先を再選択することで
+                        // 新しいファイルハンドルと権限を取得する。
+                        this.autoBackupNeedsReselect = true;
+                        this.autoBackupLastError = '保存先を再選択してください';
+                        await this.updateAutomaticBackupUI();
+                        return false;
                     }
+
+                    const permissionPromise = handle.requestPermission({ mode: 'readwrite' });
+                    const permission = await permissionPromise;
 
                     if (permission === 'granted') {
+                        this.autoBackupNeedsReselect = false;
                         this.autoBackupRetryCount = 0;
-                        await this.syncAutoBackupFile(false, true);
-                    } else {
-                        this.autoBackupLastError = '保存先へのアクセス許可が必要です';
-                        await this.updateAutomaticBackupUI();
+                        const synced = await this.syncAutoBackupFile(false, true);
+                        if (!synced) await this.updateAutomaticBackupUI();
+                        return synced;
                     }
-                    return permission === 'granted';
+
+                    this.autoBackupNeedsReselect = true;
+                    this.autoBackupLastError = '保存先を再選択してください';
+                    await this.updateAutomaticBackupUI();
+                    return false;
                 } catch (err) {
-                    this.autoBackupLastError = err?.message || '保存先への再接続に失敗しました';
                     console.warn('Automatic backup permission resume failed:', err);
+                    this.autoBackupNeedsReselect = true;
+                    this.autoBackupLastError = '保存先を再選択してください';
                     await this.updateAutomaticBackupUI();
                     return false;
                 }
@@ -5646,72 +5778,49 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
 
                 this.autoBackupSyncInProgress = true;
                 let syncSucceeded = false;
-                await this.updateAutomaticBackupUI();
+                let permissionBlocked = false;
 
                 try {
                     const handle = this.backupConfig.backupFileHandle;
                     if (!handle) return false;
 
-                    // 保存先が存在することを確認。見つからない場合は登録を解除して再設定を促す。
-                    try {
-                        if (typeof handle.getFile === 'function') await handle.getFile();
-                    } catch (err) {
-                        if (err && (err.name === 'NotFoundError' || err.name === 'InvalidStateError')) {
-                            this.backupConfig.backupFileHandle = null;
-                            this.backupConfig.backupFileName = 'type-touch_auto_backup.json';
-                            this.backupConfig.lastBackup = null;
-                            this.autoBackupLastError = '保存先ファイルが見つかりません';
-                            await this.db.saveBackupConfig(this.backupConfig);
-                            if (force && !silentFailure) {
-                                this.autoBackupSyncInProgress = false;
-                                await this.updateAutomaticBackupUI();
-                                return await this.setupAutomaticBackup();
-                            }
-                            if (!silentFailure) this.showToast('自動同期先が見つかりません。保存先を再設定してください。');
-                            return false;
-                        }
-                        throw err;
-                    }
+                    // クリックから呼ばれた場合、最初のawaitより前に書き込みストリームを開く。
+                    // PWAで権限プロンプトが必要なときのユーザー操作要件を満たしやすくする。
+                    const writablePromise = Promise.resolve(handle.createWritable()).then(
+                        writable => ({ writable }),
+                        error => ({ error })
+                    );
+                    await this.updateAutomaticBackupUI();
+                    const opened = await writablePromise;
+                    if (opened.error) throw opened.error;
+                    const count = await this.writeBackupToWritable(opened.writable);
 
-                    let permission = 'granted';
-                    if (typeof handle.queryPermission === 'function') {
-                        permission = await handle.queryPermission({ mode: 'readwrite' });
-                    }
-                    if (permission !== 'granted') {
-                        // 自動処理・非同期処理からは権限ダイアログを出さない。
-                        // requestPermission() はヘッダー同期ボタンまたは設定画面の
-                        // 「アクセスを許可」ボタンのクリックからのみ呼び出す。
-                        this.autoBackupLastError = '保存先へのアクセス許可が必要です';
-                        this.scheduleAutomaticBackupRetry();
-                        if (!silentFailure) this.showToast('保存先へのアクセス許可が必要です。設定画面の「アクセスを許可」を押してください。');
-                        return false;
-                    }
-
-                    const payload = await this.buildBackupPayload();
-                    const writable = await handle.createWritable();
-                    try {
-                        await writable.write(JSON.stringify(payload, null, 2));
-                        await writable.close();
-                    } catch (writeErr) {
-                        try { await writable.abort?.(); } catch (_) {}
-                        throw writeErr;
-                    }
-
-                    this.backupConfig.lastBackup = Date.now();
-                    await this.db.saveBackupConfig(this.backupConfig);
                     this.autoBackupLastError = null;
+                    this.autoBackupNeedsReselect = false;
                     this.autoBackupRetryCount = 0;
                     if (this.autoBackupRetryTimer) clearTimeout(this.autoBackupRetryTimer);
                     this.autoBackupRetryTimer = null;
                     syncSucceeded = true;
-                    if (!silentFailure) this.showToast('自動同期しました');
+                    if (!silentFailure) this.showToast(`${count}件の文書を自動同期しました`);
                     return true;
                 } catch (err) {
-                    this.autoBackupLastError = err?.message || '自動同期に失敗しました';
+                    const permissionError = err && (
+                        err.name === 'NotAllowedError' ||
+                        err.name === 'SecurityError' ||
+                        err.name === 'PermissionDeniedError'
+                    );
+                    permissionBlocked = !!permissionError;
+                    this.autoBackupLastError = permissionError
+                        ? '保存先への書き込み許可が必要です'
+                        : (err?.message || '自動同期に失敗しました');
+                    if (permissionError) this.autoBackupNeedsReselect = true;
                     console.error('Automatic backup sync failed:', err);
-                    this.scheduleAutomaticBackupRetry();
+                    // 権限エラーは自動再試行しても解消しないため、ユーザー操作を待つ。
+                    if (!permissionError) this.scheduleAutomaticBackupRetry();
                     if (!silentFailure) {
-                        this.showToast('自動同期に失敗しました。端末内のデータは保持され、再試行します。');
+                        this.showToast(permissionError
+                            ? '保存先への書き込み許可が必要です。設定画面の「アクセスを許可」を押してください。'
+                            : '自動同期に失敗しました。端末内のデータは保持されています。');
                     }
                     return false;
                 } finally {
@@ -5720,7 +5829,7 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     if (this.autoBackupSyncPending) {
                         this.autoBackupSyncPending = false;
                         queueMicrotask(() => this.syncAutoBackupFile(false, true));
-                    } else if (!syncSucceeded && this.hasAutomaticBackupConfigured()) {
+                    } else if (!syncSucceeded && !permissionBlocked && this.hasAutomaticBackupConfigured()) {
                         this.scheduleAutomaticBackupRetry();
                     }
                 }
@@ -5748,22 +5857,30 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 // 「今すぐ同期」は実際に保存先へアクセスできるときだけ表示。
                 if (syncRow) syncRow.style.display = usable ? 'block' : 'none';
 
-                // 非対応ブラウザでは自動同期の設定UI自体を表示しない。
-                if (setupRow) setupRow.style.display = supported ? 'block' : 'none';
+                // 自動同期非対応のPWAでも、通常のJSON保存・読み込みへ進めるよう設定欄は表示する。
+                if (setupRow) setupRow.style.display = 'block';
 
                 if (setupTitle && setupStatus && setupBtn) {
-                    if (configured && !usable) {
+                    if (configured && this.autoBackupNeedsReselect) {
+                        setupTitle.textContent = '自動同期先の再設定';
+                        setupStatus.textContent = '保存先の権限を再取得できません。保存先ファイルを選び直してください。';
+                        setupBtn.textContent = '保存先を再選択';
+                    } else if (configured && !usable) {
                         setupTitle.textContent = '自動同期のアクセス確認';
-                        setupStatus.textContent = '保存先へのアクセス許可が必要です。';
+                        setupStatus.textContent = '保存先への書き込み許可が必要です。許可できない場合は保存先を再選択してください。';
                         setupBtn.textContent = 'アクセスを許可';
                     } else if (configured && usable) {
                         setupTitle.textContent = '自動同期';
                         setupStatus.textContent = `保存先：${this.backupConfig.backupFileName || 'type-touch_auto_backup.json'}`;
                         setupBtn.textContent = '保存先を変更';
-                    } else {
+                    } else if (supported) {
                         setupTitle.textContent = '自動同期';
                         setupStatus.textContent = '保存先を設定するとJSONへ自動同期します。';
                         setupBtn.textContent = '保存先を設定';
+                    } else {
+                        setupTitle.textContent = 'バックアップ';
+                        setupStatus.textContent = 'このPWAでは自動同期用のファイル権限に対応していません。JSONを手動保存・読み込みできます。';
+                        setupBtn.textContent = '保存・読み込み';
                     }
                 }
 
@@ -5867,7 +5984,8 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
+                    // PWA/モバイルChromeでは即時revokeするとダウンロードが中断される場合がある。
+                    setTimeout(() => URL.revokeObjectURL(url), 1500);
 
                     this.backupConfig.lastBackup = Date.now();
                     await this.db.saveBackupConfig(this.backupConfig);
