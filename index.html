@@ -4708,7 +4708,7 @@ body.dark #delete-doc-btn:hover > svg {
             // ・全角 / 半角などの互換文字も可能な範囲で同一視
             // ※検索位置は「正規化後」ではなく、必ず元本文のUTF-16位置へ戻す。
             buildSearchNormalized(text) {
-                const normalized = [];
+                let normalizedText = '';
                 const starts = [];
                 const ends = [];
 
@@ -4718,37 +4718,31 @@ body.dark #delete-doc-btn:hover > svg {
                     const sourceEnd = i + (cp > 0xFFFF ? 2 : 1);
                     let piece = text.slice(sourceStart, sourceEnd);
 
-                    // NFKCで全角英数・半角カナ等を正規化
                     try { piece = piece.normalize('NFKC'); } catch (_) {}
-
-                    // カタカナ -> ひらがな。長音「ー」などはそのまま。
                     piece = Array.from(piece).map(ch => {
                         const c = ch.codePointAt(0);
-                        if (c >= 0x30A1 && c <= 0x30F6) {
-                            return String.fromCodePoint(c - 0x60);
-                        }
-                        return ch;
+                        return c >= 0x30A1 && c <= 0x30F6
+                            ? String.fromCodePoint(c - 0x60)
+                            : ch;
                     }).join('');
-
-                    // 大文字 / 小文字を同一視
                     piece = piece.toLocaleLowerCase('ja-JP');
 
-                    // 空白は連続分を1つにまとめ、検索語・本文の余分な空白を同一視する。
-                    // 圧縮した空白も元本文の範囲へ紐付け、ハイライト位置を維持する。
                     for (const ch of piece) {
                         if (/\s/u.test(ch)) {
-                            if (normalized[normalized.length - 1] === ' ') {
+                            if (normalizedText.endsWith(' ')) {
+                                // 圧縮された空白も、元本文側では連続範囲として保持する。
                                 ends[ends.length - 1] = sourceEnd;
                                 continue;
                             }
-                            normalized.push(' ');
+                            normalizedText += ' ';
                             starts.push(sourceStart);
                             ends.push(sourceEnd);
                             continue;
                         }
-                        const units = ch.length;
-                        normalized.push(ch);
-                        for (let u = 0; u < units; u++) {
+
+                        normalizedText += ch;
+                        // indexOf / length はUTF-16単位なので、対応表も必ず同じ単位で作る。
+                        for (let u = 0; u < ch.length; u++) {
                             starts.push(sourceStart);
                             ends.push(sourceEnd);
                         }
@@ -4756,18 +4750,18 @@ body.dark #delete-doc-btn:hover > svg {
                     i = sourceEnd;
                 }
 
-                // 参考方式と同じく前後の空白は検索対象から除外する。
-                while (normalized[0] === ' ') {
-                    normalized.shift();
+                // 前後の空白を除去するときも、文字列と位置対応表を同じUTF-16単位で更新する。
+                while (normalizedText.startsWith(' ')) {
+                    normalizedText = normalizedText.slice(1);
                     starts.shift();
                     ends.shift();
                 }
-                while (normalized[normalized.length - 1] === ' ') {
-                    normalized.pop();
+                while (normalizedText.endsWith(' ')) {
+                    normalizedText = normalizedText.slice(0, -1);
                     starts.pop();
                     ends.pop();
                 }
-                return { text: normalized.join(''), starts, ends };
+                return { text: normalizedText, starts, ends };
             }
 
             performSearch(options = {}) {
@@ -5019,16 +5013,23 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 const el = this.contentInput;
                 if (!el) return { text: '', segments: [] };
 
+                // getText() と同じ規則で論理行を作りながら、実DOMのText nodeと
+                // UTF-16オフセットを対応付ける。BRは文字ノードを持たないため、
+                // オフセットだけを1進め、Rangeが前後のノードをまたぐ形にする。
                 const lines = [];
-                const addLine = (root, empty = false) => {
-                    const parts = [];
+                let inlineNodes = [];
+                let inlinePresent = false;
+
+                const readLine = (nodes, isBlock = false) => {
                     let lineText = '';
-                    const walk = (node) => {
+                    const localSegments = [];
+                    const walk = node => {
                         if (node.nodeType === Node.TEXT_NODE) {
                             const value = (node.nodeValue || '').replace(/\u00a0/g, ' ');
                             if (value) {
-                                parts.push({ node, length: value.length, localStart: lineText.length });
+                                const localStart = lineText.length;
                                 lineText += value;
+                                localSegments.push({ node, localStart, localEnd: lineText.length });
                             }
                             return;
                         }
@@ -5039,157 +5040,64 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                         }
                         for (const child of node.childNodes) walk(child);
                     };
-                    if (!empty) walk(root);
-                    lines.push({ text: lineText, parts });
-                };
 
-                let inlineRoot = null;
-                const flushInline = () => {
-                    if (inlineRoot) {
-                        addLine(inlineRoot);
-                        inlineRoot = null;
+                    for (const node of nodes) walk(node);
+
+                    // getText() はDIV/P内の末尾BRが表す改行を、ブロック境界の改行と
+                    // 二重計上しないよう1つ取り除く。対応表側も同じ位置を除外する。
+                    if (isBlock && lineText.endsWith('\n')) {
+                        lineText = lineText.slice(0, -1);
                     }
+                    const lineLength = lineText.length;
+                    const segments = localSegments
+                        .filter(seg => seg.localStart < lineLength)
+                        .map(seg => ({
+                            node: seg.node,
+                            localStart: seg.localStart,
+                            localEnd: Math.min(seg.localEnd, lineLength)
+                        }))
+                        .filter(seg => seg.localEnd > seg.localStart);
+                    lines.push({ text: lineText, segments });
                 };
 
-                // Canonical model: top-level DIV/P elements are logical lines;
-                // the separator between them is exactly one \n. This is also
-                // the model used by getText(), so search offsets cannot drift.
+                const flushInline = () => {
+                    if (!inlinePresent) return;
+                    readLine(inlineNodes, false);
+                    inlineNodes = [];
+                    inlinePresent = false;
+                };
+
                 for (const node of Array.from(el.childNodes)) {
                     if (node.nodeType === Node.TEXT_NODE) {
-                        if (!inlineRoot) inlineRoot = document.createElement('span');
-                        inlineRoot.appendChild(node.cloneNode(true));
-                        // Clones are only for text assembly; actual node mapping
-                        // is rebuilt below from the real DOM.
+                        inlineNodes.push(node);
+                        inlinePresent = true;
                     } else if (node.nodeType === Node.ELEMENT_NODE && (node.tagName === 'DIV' || node.tagName === 'P')) {
                         flushInline();
                         const onlyBr = node.childNodes.length === 0 ||
                             (node.childNodes.length === 1 && node.firstChild.nodeName === 'BR');
-                        addLine(node, onlyBr);
-                    } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') {
-                        if (!inlineRoot) inlineRoot = document.createElement('span');
-                        inlineRoot.appendChild(document.createTextNode('\n'));
+                        if (onlyBr) lines.push({ text: '', segments: [] });
+                        else readLine(Array.from(node.childNodes), true);
                     } else if (node.nodeType === Node.ELEMENT_NODE) {
-                        if (!inlineRoot) inlineRoot = document.createElement('span');
-                        inlineRoot.appendChild(node.cloneNode(true));
+                        inlineNodes.push(node);
+                        inlinePresent = true;
                     }
                 }
                 flushInline();
 
                 const text = lines.map(line => line.text).join('\n');
                 const segments = [];
-                let globalOffset = 0;
-
-                // Rewalk the real DOM so every segment points to the actual Text node.
-                const walkRealLine = (root, baseOffset, empty = false) => {
-                    if (empty) return;
-                    let localOffset = 0;
-                    const walk = (node) => {
-                        if (node.nodeType === Node.TEXT_NODE) {
-                            const value = (node.nodeValue || '').replace(/\u00a0/g, ' ');
-                            if (value) {
-                                segments.push({ node, start: baseOffset + localOffset, end: baseOffset + localOffset + value.length });
-                                localOffset += value.length;
-                            }
-                            return;
-                        }
-                        if (node.nodeType !== Node.ELEMENT_NODE) return;
-                        if (node.tagName === 'BR') { localOffset += 1; return; }
-                        for (const child of node.childNodes) walk(child);
-                    };
-                    walk(root);
-                };
-
-                const realTop = Array.from(el.childNodes);
-                let lineIndex = 0;
-                let inlineBase = 0;
-                let hasInline = false;
-                const flushInlineReal = () => {
-                    if (!hasInline) return;
-                    const root = document.createDocumentFragment();
-                    // Reconstruct mapping for top-level inline nodes in document order.
-                    let localOffset = 0;
-                    const walk = (node) => {
-                        if (node.nodeType === Node.TEXT_NODE) {
-                            const value = (node.nodeValue || '').replace(/\u00a0/g, ' ');
-                            if (value) {
-                                segments.push({ node, start: inlineBase + localOffset, end: inlineBase + localOffset + value.length });
-                                localOffset += value.length;
-                            }
-                        } else if (node.nodeType === Node.ELEMENT_NODE) {
-                            if (node.tagName === 'BR') localOffset += 1;
-                            else for (const c of node.childNodes) walk(c);
-                        }
-                    };
-                    // handled by caller using collected nodes; no DOM mutation
-                    inlineBase += lines[lineIndex].text.length;
-                    lineIndex++;
-                    hasInline = false;
-                };
-
-                // Simpler and exact second pass: process the same logical lines again,
-                // keeping the real nodes and the exact local offset including BRs.
-                segments.length = 0;
-                let currentBase = 0;
-                let pendingInline = [];
-                const emitInline = () => {
-                    if (!pendingInline.length) return;
-                    let local = 0;
-                    const walk = (node) => {
-                        if (node.nodeType === Node.TEXT_NODE) {
-                            const value = (node.nodeValue || '').replace(/\u00a0/g, ' ');
-                            if (value) {
-                                segments.push({ node, start: currentBase + local, end: currentBase + local + value.length });
-                                local += value.length;
-                            }
-                        } else if (node.nodeType === Node.ELEMENT_NODE) {
-                            if (node.tagName === 'BR') local += 1;
-                            else for (const c of node.childNodes) walk(c);
-                        }
-                    };
-                    for (const n of pendingInline) walk(n);
-                    currentBase += lines[segmentsLineIndex].text.length;
-                    segmentsLineIndex++;
-                    pendingInline = [];
-                };
-
-                let segmentsLineIndex = 0;
-                // Avoid cloning/mutating anything: build a logical line descriptor of real nodes.
-                const realLines = [];
-                let pending = [];
-                const pushPending = () => { if (pending.length) { realLines.push({kind:'inline',nodes:pending}); pending=[]; } };
-                for (const node of realTop) {
-                    if (node.nodeType === Node.TEXT_NODE || (node.nodeType === Node.ELEMENT_NODE && node.tagName !== 'DIV' && node.tagName !== 'P')) pending.push(node);
-                    else if (node.nodeType === Node.ELEMENT_NODE) { pushPending(); realLines.push({kind:'block',node}); }
-                }
-                pushPending();
-
-                currentBase = 0;
-                for (const item of realLines) {
-                    const line = lines[segmentsLineIndex] || {text:''};
-                    let local = 0;
-                    const walk = (node) => {
-                        if (node.nodeType === Node.TEXT_NODE) {
-                            const value = (node.nodeValue || '').replace(/\u00a0/g, ' ');
-                            if (value) {
-                                segments.push({node,start:currentBase+local,end:currentBase+local+value.length});
-                                local += value.length;
-                            }
-                        } else if (node.nodeType === Node.ELEMENT_NODE) {
-                            if (node.tagName === 'BR') local += 1;
-                            else for (const c of node.childNodes) walk(c);
-                        }
-                    };
-                    if (item.kind === 'block') {
-                        const onlyBr = item.node.childNodes.length === 0 || (item.node.childNodes.length === 1 && item.node.firstChild.nodeName === 'BR');
-                        if (!onlyBr) for (const c of item.node.childNodes) walk(c);
-                    } else {
-                        for (const n of item.nodes) walk(n);
+                let base = 0;
+                lines.forEach((line, index) => {
+                    for (const seg of line.segments) {
+                        segments.push({
+                            node: seg.node,
+                            start: base + seg.localStart,
+                            end: base + seg.localEnd
+                        });
                     }
-                    currentBase += line.text.length;
-                    if (segmentsLineIndex < lines.length - 1) currentBase += 1;
-                    segmentsLineIndex++;
-                }
-
+                    base += line.text.length;
+                    if (index < lines.length - 1) base += 1;
+                });
                 return { text, segments };
             }
 
@@ -5213,29 +5121,34 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 const pointFor = (pos, preferEnd = false) => {
                     const p = Math.max(0, Math.min(Number(pos) || 0, text.length));
                     if (!segments.length) return { node: this.contentInput, offset: 0 };
-                    // 境界位置は開始点なら次のテキストノード、終了点なら直前のノードを優先。
-                    // 「<= end」で常に前のノードを拾うと、改行や装飾タグをまたいだ検索で
-                    // 選択範囲がずれるため、開始・終了で境界の扱いを分ける。
+
                     if (preferEnd) {
+                        // 終了位置は、境界なら直前のText nodeの末尾を優先する。
                         for (let i = segments.length - 1; i >= 0; i--) {
                             const seg = segments[i];
-                            if (p > seg.start && p <= seg.end) {
-                                return { node: seg.node, offset: Math.max(0, Math.min(seg.node.length, p - seg.start)) };
-                            }
-                            if (p === seg.start) {
-                                return { node: seg.node, offset: 0 };
-                            }
-                        }
-                    } else {
-                        for (const seg of segments) {
-                            if (p >= seg.start && p < seg.end) {
-                                return { node: seg.node, offset: Math.max(0, Math.min(seg.node.length, p - seg.start)) };
+                            if (p === seg.end) return { node: seg.node, offset: seg.node.length };
+                            if (p > seg.start && p < seg.end) {
+                                return { node: seg.node, offset: p - seg.start };
                             }
                             if (p === seg.start) return { node: seg.node, offset: 0 };
                         }
+                        const last = segments[segments.length - 1];
+                        return { node: last.node, offset: last.node.length };
                     }
-                    const seg = preferEnd ? segments[segments.length - 1] : segments[0];
-                    return { node: seg.node, offset: preferEnd ? seg.node.length : 0 };
+
+                    // 開始位置は、同じ境界に次のText nodeがあればそちらを優先。
+                    for (const seg of segments) {
+                        if (p === seg.start) return { node: seg.node, offset: 0 };
+                        if (p > seg.start && p < seg.end) {
+                            return { node: seg.node, offset: p - seg.start };
+                        }
+                    }
+                    for (let i = segments.length - 1; i >= 0; i--) {
+                        const seg = segments[i];
+                        if (p === seg.end) return { node: seg.node, offset: seg.node.length };
+                    }
+                    const first = segments[0];
+                    return { node: first.node, offset: 0 };
                 };
 
                 const normal = new Highlight();
@@ -6621,27 +6534,31 @@ this.searchMutationObserver = new MutationObserver((mutations) => {
                 const el = this.contentInput;
                 if (!el) return;
                 const map = this.buildSearchTextMap();
+                const segments = map.segments;
                 const clamp = n => Math.max(0, Math.min(Number(n) || 0, map.text.length));
                 start = clamp(start); end = clamp(end);
                 if (end < start) [start, end] = [end, start];
-                const pointFor = (p, preferEnd=false) => {
-                    const segments = map.segments;
-                    if (!segments.length) return {node:el,offset:0};
-                    // 開始位置は境界の次の文字、終了位置は境界の直前の文字に対応させる。
+                const pointFor = (p, preferEnd = false) => {
+                    if (!segments.length) return { node: el, offset: 0 };
                     if (preferEnd) {
                         for (let i = segments.length - 1; i >= 0; i--) {
                             const seg = segments[i];
-                            if (p > seg.start && p <= seg.end) return {node:seg.node,offset:Math.max(0,Math.min(seg.node.length,p-seg.start))};
-                            if (p === seg.start) return {node:seg.node,offset:0};
+                            if (p === seg.end) return { node: seg.node, offset: seg.node.length };
+                            if (p > seg.start && p < seg.end) return { node: seg.node, offset: p - seg.start };
+                            if (p === seg.start) return { node: seg.node, offset: 0 };
                         }
-                    } else {
-                        for (const seg of segments) {
-                            if (p >= seg.start && p < seg.end) return {node:seg.node,offset:Math.max(0,Math.min(seg.node.length,p-seg.start))};
-                            if (p === seg.start) return {node:seg.node,offset:0};
-                        }
+                        const last = segments[segments.length - 1];
+                        return { node: last.node, offset: last.node.length };
                     }
-                    const seg=preferEnd?segments[segments.length-1]:segments[0];
-                    return {node:seg.node,offset:preferEnd?seg.node.length:0};
+                    for (const seg of segments) {
+                        if (p === seg.start) return { node: seg.node, offset: 0 };
+                        if (p > seg.start && p < seg.end) return { node: seg.node, offset: p - seg.start };
+                    }
+                    for (let i = segments.length - 1; i >= 0; i--) {
+                        const seg = segments[i];
+                        if (p === seg.end) return { node: seg.node, offset: seg.node.length };
+                    }
+                    return { node: segments[0].node, offset: 0 };
                 };
                 const a=pointFor(start,false), b=pointFor(end,true);
                 try {
